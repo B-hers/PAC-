@@ -1554,6 +1554,244 @@ function PriceTab({ data, pricing, setPricing, zone, setZone }) {
 }
 
 /* ============================== DEVIS (offre commerciale imprimable) ============================== */
+const DEVIS_LOCALE = { FR: "fr-BE", NL: "nl-BE", EN: "en-GB" };
+
+const DEVIS_I18N = {
+  vat: { FR: "TVA", NL: "BTW", EN: "VAT" },
+  htva: { FR: "HTVA", NL: "excl. btw", EN: "excl. VAT" },
+  printBtn: { FR: "🖨 Imprimer / Exporter le devis PDF", NL: "🖨 Afdrukken / Offerte PDF exporteren", EN: "🖨 Print / Export the quote as PDF" },
+  labelClient: { FR: "Client", NL: "Klant", EN: "Client" },
+  clientNamePlaceholder: { FR: "Nom du client à compléter", NL: "Naam van de klant nog in te vullen", EN: "Client name to be completed" },
+  clientAddressPlaceholder: { FR: "Adresse du chantier à compléter", NL: "Adres van de werf nog in te vullen", EN: "Site address to be completed" },
+  labelProjectManager: { FR: "Gestionnaire de projet", NL: "Projectbeheerder", EN: "Project manager" },
+  toBeCompleted: { FR: "À compléter", NL: "Nog in te vullen", EN: "To be completed" },
+  labelOfferTitle: { FR: "Titre de l'offre", NL: "Titel van de offerte", EN: "Offer title" },
+  labelPrice: { FR: "Prix", NL: "Prijs", EN: "Price" },
+  labelDate: { FR: "Date", NL: "Datum", EN: "Date" },
+  labelValidity: { FR: "Validité de l'offre", NL: "Geldigheid van de offerte", EN: "Offer validity" },
+  validityValue: { FR: "2 semaines", NL: "2 weken", EN: "2 weeks" },
+  heroTitle: { FR: "Confort toute l'année, chaud comme froid", NL: "Comfort het hele jaar door, warm en koud", EN: "Year round comfort, both hot and cold" },
+  heroSub: { FR: "Technologie LG Dual Inverter · Pilotage Wi-Fi · Garantie compresseur 10 ans", NL: "LG Dual Inverter technologie · Wifi bediening · 10 jaar garantie op de compressor", EN: "LG Dual Inverter technology · Wi-Fi control · 10 year compressor warranty" },
+  titre: {
+    FR: (hasPac, hasBoiler, multi) => hasPac && hasBoiler ? `Solution de climatisation réversible LG${multi ? " Multi Split" : ""} et boiler thermodynamique` : hasPac ? `Solution de climatisation réversible LG${multi ? " Multi Split" : ""}` : hasBoiler ? "Boiler thermodynamique Atlantic Explorer V4" : "Offre We Green Energy",
+    NL: (hasPac, hasBoiler, multi) => hasPac && hasBoiler ? `LG omkeerbare airconditioning oplossing${multi ? " Multi Split" : ""} en thermodynamische boiler` : hasPac ? `LG omkeerbare airconditioning oplossing${multi ? " Multi Split" : ""}` : hasBoiler ? "Atlantic Explorer V4 thermodynamische boiler" : "Offerte We Green Energy",
+    EN: (hasPac, hasBoiler, multi) => hasPac && hasBoiler ? `LG reversible air conditioning solution${multi ? " Multi Split" : ""} and thermodynamic boiler` : hasPac ? `LG reversible air conditioning solution${multi ? " Multi Split" : ""}` : hasBoiler ? "Atlantic Explorer V4 thermodynamic boiler" : "We Green Energy offer",
+  },
+  secTitle2: {
+    FR: (hasPac, hasBoiler) => hasPac && hasBoiler ? "Votre installation pompe à chaleur air-air et boiler thermodynamique" : hasPac ? "Votre installation pompe à chaleur air-air" : hasBoiler ? "Votre boiler thermodynamique" : "Votre installation",
+    NL: (hasPac, hasBoiler) => hasPac && hasBoiler ? "Uw lucht-lucht warmtepomp installatie en thermodynamische boiler" : hasPac ? "Uw lucht-lucht warmtepomp installatie" : hasBoiler ? "Uw thermodynamische boiler" : "Uw installatie",
+    EN: (hasPac, hasBoiler) => hasPac && hasBoiler ? "Your air-to-air heat pump installation and thermodynamic boiler" : hasPac ? "Your air-to-air heat pump installation" : hasBoiler ? "Your thermodynamic boiler" : "Your installation",
+  },
+  sec21Title: { FR: "2.1 Description générale", NL: "2.1 Algemene beschrijving", EN: "2.1 General description" },
+  desc1: {
+    FR: (multi, nbIndoor, names) => `Sur base de votre projet, nous vous proposons une solution de climatisation réversible LG${multi ? " Multi Split" : ""}${nbIndoor > 0 ? ` desservant ${nbIndoor} unité${nbIndoor > 1 ? "s" : ""} intérieure${nbIndoor > 1 ? "s" : ""}` : ""}${names ? " (" + names + ")" : ""}.`,
+    NL: (multi, nbIndoor, names) => `Op basis van uw project voorzien wij u van een LG omkeerbare airconditioning oplossing${multi ? " Multi Split" : ""}${nbIndoor > 0 ? ` die ${nbIndoor} binnenunit${nbIndoor > 1 ? "s" : ""} bedient` : ""}${names ? " (" + names + ")" : ""}.`,
+    EN: (multi, nbIndoor, names) => `Based on your project, we propose an LG reversible air conditioning solution${multi ? " Multi Split" : ""}${nbIndoor > 0 ? ` serving ${nbIndoor} indoor unit${nbIndoor > 1 ? "s" : ""}` : ""}${names ? " (" + names + ")" : ""}.`,
+  },
+  desc2: {
+    FR: "Cette configuration permet de chauffer et de rafraîchir chaque pièce indépendamment, pour un confort toute l'année avec un encombrement extérieur limité.",
+    NL: "Deze configuratie maakt het mogelijk om elke ruimte onafhankelijk te verwarmen en te koelen, voor comfort het hele jaar door met een beperkte buitenopstelling.",
+    EN: "This configuration allows each room to be heated and cooled independently, providing year round comfort with a limited outdoor footprint.",
+  },
+  desc3: {
+    FR: "La technologie Dual Inverter de LG ajuste en continu la puissance du compresseur au besoin réel de chaque pièce, ce qui limite la consommation électrique tout en assurant un fonctionnement silencieux.",
+    NL: "De Dual Inverter technologie van LG past het vermogen van de compressor voortdurend aan de werkelijke behoefte van elke ruimte aan, wat het elektriciteitsverbruik beperkt en een stille werking garandeert.",
+    EN: "LG's Dual Inverter technology continuously adjusts compressor power to each room's actual needs, reducing electricity consumption while ensuring quiet operation.",
+  },
+  sec22Title: { FR: "2.2 Choix des composants", NL: "2.2 Keuze van de componenten", EN: "2.2 Choice of components" },
+  thNum: { FR: "#", NL: "#", EN: "#" },
+  thType: { FR: "Type", NL: "Type", EN: "Type" },
+  thComponents: { FR: "Composants", NL: "Componenten", EN: "Components" },
+  thBrand: { FR: "Marque", NL: "Merk", EN: "Brand" },
+  thQty: { FR: "Quantité", NL: "Aantal", EN: "Quantity" },
+  rowOutdoorUnit: { FR: "Unité extérieure", NL: "Buitenunit", EN: "Outdoor unit" },
+  rowIndoorUnit: { FR: "Unité intérieure", NL: "Binnenunit", EN: "Indoor unit" },
+  rowRefrigerantPiping: { FR: "Tuyauteries frigorifiques", NL: "Koelleidingen", EN: "Refrigerant piping" },
+  refrigerantPipingDesc: {
+    FR: m => `Liaisons cuivre entre unités, jusqu'à ${m} m par unité intérieure incluse`,
+    NL: m => `Koperen verbindingen tussen units, tot ${m} m per binnenunit inbegrepen`,
+    EN: m => `Copper connections between units, up to ${m} m per indoor unit included`,
+  },
+  rowConnectionAccessories: { FR: "Accessoires de raccordement", NL: "Aansluitaccessoires", EN: "Connection accessories" },
+  connectionAccessoriesDesc: {
+    FR: "Supports, colliers, goulottes et câblage électrique de liaison entre unités",
+    NL: "Steunen, klemmen, kabelgoten en elektrische bekabeling tussen de units",
+    EN: "Brackets, clips, trunking and electrical wiring between units",
+  },
+  rowCommissioning: { FR: "Mise en service", NL: "Inbedrijfstelling", EN: "Commissioning" },
+  commissioningDesc: {
+    FR: "Tirage au vide, contrôle d'étanchéité, mise en service et réglages",
+    NL: "Vacuümtrekken, lekdichtheidscontrole, inbedrijfstelling en instellingen",
+    EN: "Vacuum pull down, leak testing, commissioning and adjustments",
+  },
+  rowTechVisit: { FR: "Visite technique", NL: "Technisch bezoek", EN: "Technical visit" },
+  techVisitDesc: {
+    FR: "Passage d'un technicien We Green avant chantier pour validation finale",
+    NL: "Bezoek van een We Green technicus vóór de werf voor finale validatie",
+    EN: "Visit by a We Green technician before the works for final validation",
+  },
+  rowExtraMeters: { FR: "Mètres courants suppl.", NL: "Extra lopende meters", EN: "Additional running metres" },
+  extraMetersDesc: {
+    FR: m => `Au-delà de ${m} m entre une unité intérieure et l'unité extérieure`,
+    NL: m => `Boven ${m} m tussen een binnenunit en de buitenunit`,
+    EN: m => `Beyond ${m} m between an indoor unit and the outdoor unit`,
+  },
+  notIncludedPrice: {
+    FR: p => `Non inclus · ${p} €/m (à confirmer sur place)`,
+    NL: p => `Niet inbegrepen · ${p} €/m (te bevestigen ter plaatse)`,
+    EN: p => `Not included · €${p}/m (to be confirmed on site)`,
+  },
+  included: { FR: "Inclus", NL: "Inbegrepen", EN: "Included" },
+  footnote22: {
+    FR: "Le choix précis de l'emplacement de chaque unité intérieure et extérieure est confirmé lors de la visite technique. Les codes produits ci-dessus correspondent à la configuration validée avec votre gestionnaire de projet.",
+    NL: "De precieze locatie van elke binnen- en buitenunit wordt bevestigd tijdens het technisch bezoek. De hierboven vermelde productcodes komen overeen met de configuratie die met uw projectbeheerder werd gevalideerd.",
+    EN: "The exact placement of each indoor and outdoor unit is confirmed during the technical visit. The product codes above correspond to the configuration validated with your project manager.",
+  },
+  boilerSectionTitle: { FR: "Boiler thermodynamique", NL: "Thermodynamische boiler", EN: "Thermodynamic boiler" },
+  boilerModel: { FR: "Modèle", NL: "Model", EN: "Model" },
+  boilerModelValue: {
+    FR: (vol, ref) => `Atlantic Explorer V4 ${vol} L (réf. ${ref})`,
+    NL: (vol, ref) => `Atlantic Explorer V4 ${vol} L (ref. ${ref})`,
+    EN: (vol, ref) => `Atlantic Explorer V4 ${vol} L (ref. ${ref})`,
+  },
+  boilerPerf: { FR: "Performance", NL: "Prestaties", EN: "Performance" },
+  boilerPerfValue: {
+    FR: (cop, air) => `COP ${cop} (7°C) · raccordement air ${air}`,
+    NL: (cop, air) => `COP ${cop} (7°C) · luchtaansluiting ${air}`,
+    EN: (cop, air) => `COP ${cop} (7°C) · air connection ${air}`,
+  },
+  boilerDims: { FR: "Dimensions", NL: "Afmetingen", EN: "Dimensions" },
+  boilerDimsValue: {
+    FR: (dims, poids) => `${dims} mm (H×L×P) · ${poids} kg`,
+    NL: (dims, poids) => `${dims} mm (H×B×D) · ${poids} kg`,
+    EN: (dims, poids) => `${dims} mm (H×W×D) · ${poids} kg`,
+  },
+  sec3Title: { FR: "3. Fiche technique LG", NL: "3. Technische fiche LG", EN: "3. LG technical data sheet" },
+  sec3Paragraph: {
+    FR: gammes => `Des unités LG ${gammes} au design pensé pour s'intégrer dans toutes les pièces de vie, avec pilotage Wi-Fi via l'application LG ThinQ et compatibilité Google Assistant pour un contrôle vocal simple.`,
+    NL: gammes => `LG ${gammes} units met een ontwerp dat in elke leefruimte past, met wifi bediening via de LG ThinQ app en Google Assistant compatibiliteit voor eenvoudige spraakbediening.`,
+    EN: gammes => `LG ${gammes} units designed to blend into any living space, with Wi-Fi control via the LG ThinQ app and Google Assistant compatibility for simple voice control.`,
+  },
+  sec31OutdoorTitle: {
+    FR: code => `Unité extérieure ${code}`,
+    NL: code => `Buitenunit ${code}`,
+    EN: code => `Outdoor unit ${code}`,
+  },
+  coolingCapacity: { FR: "Puissance frigorifique", NL: "Koelvermogen", EN: "Cooling capacity" },
+  heatingCapacity: { FR: "Puissance calorifique", NL: "Verwarmingsvermogen", EN: "Heating capacity" },
+  kwNominal: {
+    FR: kw => `${kw} kW (nominal)`,
+    NL: kw => `${kw} kW (nominaal)`,
+    EN: kw => `${kw} kW (nominal)`,
+  },
+  kwFroidChaud: {
+    FR: (froid, chaud) => `${froid} kW froid / ${chaud} kW chaud`,
+    NL: (froid, chaud) => `${froid} kW koelen / ${chaud} kW verwarmen`,
+    EN: (froid, chaud) => `${froid} kW cooling / ${chaud} kW heating`,
+  },
+  reference: { FR: "Référence", NL: "Referentie", EN: "Reference" },
+  refrigerant: { FR: "Fluide frigorigène", NL: "Koelmiddel", EN: "Refrigerant" },
+  connections: { FR: "Raccordements", NL: "Aansluitingen", EN: "Connections" },
+  connectionsValue: {
+    FR: n => `Jusqu'à ${n} unités intérieures`,
+    NL: n => `Tot ${n} binnenunits`,
+    EN: n => `Up to ${n} indoor units`,
+  },
+  sec32IndoorTitle: { FR: "Unités intérieures", NL: "Binnenunits", EN: "Indoor units" },
+  thModel: { FR: "Modèle", NL: "Model", EN: "Model" },
+  thGamme: { FR: "Gamme", NL: "Gamma", EN: "Range" },
+  thRoom: { FR: "Pièce", NL: "Ruimte", EN: "Room" },
+  thPowerCoolHeat: { FR: "Puissance froid / chaud", NL: "Vermogen koelen / verwarmen", EN: "Cooling / heating capacity" },
+  thReference: { FR: "Référence", NL: "Referentie", EN: "Reference" },
+  footnote3: {
+    FR: "Garantie de 10 ans sur le compresseur (garantie fabricant LG), sous réserve d'une installation par un professionnel certifié et d'un entretien conforme. Données techniques issues de la documentation constructeur, sous réserve de modification par LG sans préavis.",
+    NL: "10 jaar garantie op de compressor (fabrieksgarantie LG), op voorwaarde van installatie door een gecertificeerd vakman en conform onderhoud. Technische gegevens afkomstig van de constructeursdocumentatie, onder voorbehoud van wijziging door LG zonder voorafgaande kennisgeving.",
+    EN: "10 year compressor warranty (LG manufacturer warranty), subject to installation by a certified professional and compliant maintenance. Technical data from manufacturer documentation, subject to change by LG without notice.",
+  },
+  sec4Title: { FR: "4. Coût du projet", NL: "4. Kostprijs van het project", EN: "4. Project cost" },
+  sec4Paragraph: {
+    FR: price => `Le coût total du projet, comprenant la fourniture du matériel, les tuyauteries frigorifiques, les accessoires de raccordement, la main d'oeuvre et la mise en service, s'élève à ${price} € (HTVA).`,
+    NL: price => `De totale kostprijs van het project, inclusief levering van het materiaal, koelleidingen, aansluitaccessoires, arbeid en inbedrijfstelling, bedraagt ${price} € (excl. btw).`,
+    EN: price => `The total project cost, including material supply, refrigerant piping, connection accessories, labour and commissioning, amounts to €${price} (excl. VAT).`,
+  },
+  sec4Vat: {
+    FR: "Le taux de TVA de 6% est d'application pour les installations chez des particuliers si votre habitation a plus de 10 ans, 21% si votre habitation a moins de 10 ans. Pour les entreprises, la TVA est en autoliquidation.",
+    NL: "Het btw-tarief van 6% is van toepassing voor installaties bij particulieren indien uw woning ouder is dan 10 jaar, 21% indien uw woning jonger is dan 10 jaar. Voor bedrijven wordt de btw verlegd.",
+    EN: "A 6% VAT rate applies to installations for private individuals if your home is more than 10 years old, 21% if your home is less than 10 years old. For businesses, VAT is reverse charged.",
+  },
+  sec5Title: { FR: "5. Conditions de vente", NL: "5. Verkoopsvoorwaarden", EN: "5. Terms of sale" },
+  sec51Title: { FR: "5.1 Conditions de paiement", NL: "5.1 Betalingsvoorwaarden", EN: "5.1 Payment terms" },
+  payment1: { FR: "À la signature du contrat : 20%", NL: "Bij ondertekening van het contract: 20%", EN: "Upon signing the contract: 20%" },
+  payment2: { FR: "À la livraison du matériel et à l'ouverture du chantier : 60%", NL: "Bij levering van het materiaal en start van de werf: 60%", EN: "Upon delivery of materials and start of works: 60%" },
+  payment3: { FR: "À la clôture du chantier et à la mise en service : 20%", NL: "Bij afsluiting van de werf en inbedrijfstelling: 20%", EN: "Upon completion of works and commissioning: 20%" },
+  sec52Title: { FR: "5.2 Délai de livraison", NL: "5.2 Leveringstermijn", EN: "5.2 Delivery time" },
+  deliveryText: { FR: "Le projet sera livré dans le mois suivant la réception du premier paiement.*", NL: "Het project wordt opgeleverd binnen de maand na ontvangst van de eerste betaling.*", EN: "The project will be delivered within one month of receipt of the first payment.*" },
+  sec53Title: { FR: "5.3 Assurance qualité technique", NL: "5.3 Technische kwaliteitsborging", EN: "5.3 Technical quality assurance" },
+  qualityText: {
+    FR: "Tous les matériaux et services sont conformes aux normes internationales en vigueur et aux normes RGIE. We Green est certifiée Rescert pour les 3 régions en Belgique.",
+    NL: "Alle materialen en diensten voldoen aan de geldende internationale normen en de AREI-normen. We Green is Rescert gecertificeerd voor de 3 gewesten van België.",
+    EN: "All materials and services comply with current international standards and Belgian RGIE electrical regulations. We Green is Rescert certified for all 3 regions of Belgium.",
+  },
+  sec54Title: { FR: "5.4 Garanties We Green", NL: "5.4 Garanties We Green", EN: "5.4 We Green warranties" },
+  warranty1: { FR: "Unités LG : 10 ans de garantie sur le compresseur (garantie fabricant).", NL: "LG units: 10 jaar garantie op de compressor (fabrieksgarantie).", EN: "LG units: 10 year compressor warranty (manufacturer warranty)." },
+  warranty2: { FR: "Autres pièces et composants : garantie légale de 2 ans.", NL: "Overige onderdelen en componenten: wettelijke garantie van 2 jaar.", EN: "Other parts and components: 2 year legal warranty." },
+  warranty3: { FR: "Installation et mise en service réalisées par une équipe We Green certifiée Rescert.", NL: "Installatie en inbedrijfstelling uitgevoerd door een Rescert gecertificeerd We Green team.", EN: "Installation and commissioning carried out by a Rescert certified We Green team." },
+  footnote54: {
+    FR: "* Si le délai d'installation n'est pas respecté en raison d'un contretemps du côté du client, le délai pourra être renégocié entre les parties. Devis non contractuel avant validation finale par le chauffagiste.",
+    NL: "* Indien de installatietermijn niet wordt gerespecteerd door een probleem aan de kant van de klant, kan de termijn tussen de partijen worden heronderhandeld. Deze offerte is niet contractueel voor finale validatie door de installateur.",
+    EN: "* If the installation deadline is not met due to a delay on the client's side, the deadline may be renegotiated between the parties. This quote is non contractual pending final validation by the installer.",
+  },
+  sec6Title: { FR: "6. Pourquoi choisir We Green", NL: "6. Waarom kiezen voor We Green", EN: "6. Why choose We Green" },
+  card1Title: { FR: "Un interlocuteur unique", NL: "Eén enkel aanspreekpunt", EN: "A single point of contact" },
+  card1Body: {
+    FR: t => `${t} suit votre projet du premier contact à la mise en service.`,
+    NL: t => `${t} volgt uw project op van het eerste contact tot de inbedrijfstelling.`,
+    EN: t => `${t} follows your project from first contact through to commissioning.`,
+  },
+  card2Title: { FR: "Des équipes certifiées", NL: "Gecertificeerde teams", EN: "Certified teams" },
+  card2Body: {
+    FR: "We Green est certifiée Rescert dans les 3 régions de Belgique.",
+    NL: "We Green is Rescert gecertificeerd in de 3 gewesten van België.",
+    EN: "We Green is Rescert certified in all 3 regions of Belgium.",
+  },
+  card3Title: { FR: "Du matériel premium", NL: "Premium materiaal", EN: "Premium equipment" },
+  card3Body: {
+    FR: "Nous sélectionnons des marques reconnues comme LG, avec des garanties constructeur solides.",
+    NL: "Wij selecteren erkende merken zoals LG, met sterke fabrieksgaranties.",
+    EN: "We select recognised brands such as LG, backed by strong manufacturer warranties.",
+  },
+  card4Title: { FR: "Un projet sans tracas", NL: "Een zorgeloos project", EN: "A hassle-free project" },
+  card4Body: {
+    FR: "Démarches administratives et logistiques prises en charge, pour un chantier fluide de A à Z.",
+    NL: "Administratieve en logistieke stappen worden voor u geregeld, voor een vlotte werf van A tot Z.",
+    EN: "Administrative and logistical steps handled for you, for a smooth project from start to finish.",
+  },
+  sec7Title: { FR: "7. Signatures", NL: "7. Handtekeningen", EN: "7. Signatures" },
+  signatureIntro: {
+    FR: nom => `Je soussigné, ${nom}, accepte la proposition de We Green décrite dans cette offre, ainsi que leurs conditions générales de vente.`,
+    NL: nom => `Ondergetekende, ${nom}, aanvaardt het voorstel van We Green zoals beschreven in deze offerte, evenals hun algemene verkoopsvoorwaarden.`,
+    EN: nom => `I, the undersigned, ${nom}, accept the proposal from We Green described in this offer, as well as their general terms and conditions of sale.`,
+  },
+  clientSignatureLabel: { FR: "Signature du client", NL: "Handtekening van de klant", EN: "Client signature" },
+  weGreenProposalText: {
+    FR: "Nous, We Green, proposons le cadre de travail décrit ci-dessus.",
+    NL: "Wij, We Green, stellen het hierboven beschreven werkkader voor.",
+    EN: "We, We Green, propose the working framework described above.",
+  },
+  weGreenSignatureLabel: {
+    FR: t => `Signature We Green${t ? " · " + t : ""}`,
+    NL: t => `Handtekening We Green${t ? " · " + t : ""}`,
+    EN: t => `We Green signature${t ? " · " + t : ""}`,
+  },
+};
+
+function T(lang, key, ...args) {
+  const entry = DEVIS_I18N[key];
+  if (!entry) return key;
+  const val = entry[lang] || entry.FR;
+  return typeof val === "function" ? val(...args) : val;
+}
+
 function DevisSecBar({ children }) {
   return <div style={{ background: `linear-gradient(90deg, ${DEVIS_GREEN} 0%, #cbdb52 100%)`, color: WHITE, fontWeight: 700, fontSize: 14, padding: "7px 12px", borderRadius: 6, marginBottom: 10, marginTop: 4 }}>{children}</div>;
 }
@@ -1574,8 +1812,10 @@ function DevisPill({ children }) {
 
 function DevisTab({ data, pricing, setPricing, zone, setZone }) {
   const bd = computeDevisBreakdown(data, pricing, zone);
-  const fmt = n => (Math.round(n * 100) / 100).toLocaleString("fr-BE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const today = new Date().toLocaleDateString("fr-BE");
+  const lang = (data.client && data.client.langue) || "FR";
+  const fmt = n => (Math.round(n * 100) / 100).toLocaleString(DEVIS_LOCALE[lang] || "fr-BE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const today = new Date().toLocaleDateString(DEVIS_LOCALE[lang] || "fr-BE");
+  const t = (key, ...args) => T(lang, key, ...args);
 
   const outdoorLines = data.pac.outdoorUnits.map((u, i) => {
     const line = bd.lines.find(l => l.key === `ue-${u.id}`);
@@ -1593,21 +1833,13 @@ function DevisTab({ data, pricing, setPricing, zone, setZone }) {
   const nbOutdoor = outdoorLines.length;
   const mainOutdoorCode = outdoorLines.length === 1 ? outdoorLines[0].line.code : null;
   const outdoorSpec = mainOutdoorCode ? OUTDOOR_UNITS.find(o => o.code === mainOutdoorCode) : null;
+  const isMultiSplit = nbOutdoor > 1 || nbIndoor > 1;
 
   // Une photo de chantier réelle (si disponible) illustre l'offre, à défaut un bandeau stylisé aux couleurs We Green.
   const heroPhoto = (data.pac.outdoorUnits.flatMap(u => u.photos || [])[0]) || (data.pac.rooms.flatMap(r => r.photos || [])[0]) || null;
 
-  let titre;
-  if (data.modules.pac && boilerSel) titre = `Solution de climatisation réversible LG${(nbOutdoor > 1 || nbIndoor > 1) ? " Multi Split" : ""} et boiler thermodynamique`;
-  else if (data.modules.pac) titre = `Solution de climatisation réversible LG${(nbOutdoor > 1 || nbIndoor > 1) ? " Multi Split" : ""}`;
-  else if (boilerSel) titre = "Boiler thermodynamique Atlantic Explorer V4";
-  else titre = "Offre We Green Energy";
-
-  let secTitle2;
-  if (data.modules.pac && boilerSel) secTitle2 = "Votre installation pompe à chaleur air-air et boiler thermodynamique";
-  else if (data.modules.pac) secTitle2 = "Votre installation pompe à chaleur air-air";
-  else if (boilerSel) secTitle2 = "Votre boiler thermodynamique";
-  else secTitle2 = "Votre installation";
+  const titre = t("titre", !!data.modules.pac, !!boilerSel, isMultiSplit);
+  const secTitle2 = t("secTitle2", !!data.modules.pac, !!boilerSel);
 
   return (
     <div>
@@ -1636,36 +1868,36 @@ function DevisTab({ data, pricing, setPricing, zone, setZone }) {
             <div style={{ textAlign: "right", background: BG, border: `1px solid ${BORDER}`, borderRadius: 8, padding: "7px 12px", fontSize: 10.5, color: MUTED, minWidth: 220 }}>
               <div style={{ fontWeight: 700, color: TEXT }}>We Green Energy</div>
               <div>Avenue Louise 231, 1050 Ixelles</div>
-              <div>invoice@we-green.be · TVA BE0719 954 388</div>
+              <div>invoice@we-green.be · {t("vat")} BE0719 954 388</div>
             </div>
           </div>
 
           <div className="g2" style={{ marginBottom: 8 }}>
-            <DevisCard label="Client">
-              <div>{data.client.nom || "Nom du client à compléter"}</div>
-              <div style={{ fontSize: 11, fontWeight: 400, color: MUTED, marginTop: 2 }}>{data.client.adresse || "Adresse du chantier à compléter"}</div>
+            <DevisCard label={t("labelClient")}>
+              <div>{data.client.nom || t("clientNamePlaceholder")}</div>
+              <div style={{ fontSize: 11, fontWeight: 400, color: MUTED, marginTop: 2 }}>{data.client.adresse || t("clientAddressPlaceholder")}</div>
             </DevisCard>
-            <DevisCard label="Gestionnaire de projet">
-              <div>{data.chantier.technicien || "À compléter"}</div>
+            <DevisCard label={t("labelProjectManager")}>
+              <div>{data.chantier.technicien || t("toBeCompleted")}</div>
               <div style={{ fontSize: 11, fontWeight: 400, color: MUTED, marginTop: 2 }}>We Green Energy</div>
             </DevisCard>
           </div>
 
           <div style={{ marginBottom: 8 }}>
-            <DevisCard label="Titre de l'offre">{titre}</DevisCard>
+            <DevisCard label={t("labelOfferTitle")}>{titre}</DevisCard>
           </div>
 
           <div className="g3" style={{ marginBottom: 12 }}>
-            <DevisCard label="Prix" big>{fmt(bd.prixFinal)} € HTVA</DevisCard>
-            <DevisCard label="Date">{data.chantier.date || today}</DevisCard>
-            <DevisCard label="Validité de l'offre">2 semaines</DevisCard>
+            <DevisCard label={t("labelPrice")} big>{fmt(bd.prixFinal)} € {t("htva")}</DevisCard>
+            <DevisCard label={t("labelDate")}>{data.chantier.date || today}</DevisCard>
+            <DevisCard label={t("labelValidity")}>{t("validityValue")}</DevisCard>
           </div>
 
           <div className="avoid-break" style={{ position: "relative", borderRadius: 10, overflow: "hidden", marginBottom: 4, height: 190, background: heroPhoto ? undefined : `linear-gradient(135deg, ${GREEN} 0%, #2d8a52 55%, ${DEVIS_GREEN} 100%)` }}>
             {heroPhoto && <img src={heroPhoto.url} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />}
             <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "12px 16px", background: "linear-gradient(0deg, rgba(20,22,10,0.8) 0%, rgba(20,22,10,0) 100%)" }}>
-              <div style={{ color: WHITE, fontWeight: 700, fontSize: 14.5 }}>Confort toute l'année, chaud comme froid</div>
-              <div style={{ color: "#eef0df", fontSize: 10.5, marginTop: 2 }}>Technologie LG Dual Inverter · Pilotage Wi-Fi · Garantie compresseur 10 ans</div>
+              <div style={{ color: WHITE, fontWeight: 700, fontSize: 14.5 }}>{t("heroTitle")}</div>
+              <div style={{ color: "#eef0df", fontSize: 10.5, marginTop: 2 }}>{t("heroSub")}</div>
             </div>
           </div>
 
@@ -1674,42 +1906,40 @@ function DevisTab({ data, pricing, setPricing, zone, setZone }) {
 
           {data.modules.pac && (
             <React.Fragment>
-              <DevisSubH>2.1 Description générale</DevisSubH>
+              <DevisSubH>{t("sec21Title")}</DevisSubH>
               <p style={{ marginBottom: 8 }}>
-                Sur base de votre projet, nous vous proposons une solution de climatisation réversible LG{outdoorSpec ? " Multi Split" : ""}
-                {nbIndoor > 0 ? ` desservant ${nbIndoor} unité${nbIndoor > 1 ? "s" : ""} intérieure${nbIndoor > 1 ? "s" : ""}` : ""}
-                {indoorAssign.length > 0 ? " (" + indoorAssign.map(x => x.r.nom).filter(Boolean).join(", ") + ")" : ""}.
+                {t("desc1", !!outdoorSpec, nbIndoor, indoorAssign.length > 0 ? indoorAssign.map(x => x.r.nom).filter(Boolean).join(", ") : "")}
               </p>
-              <p style={{ marginBottom: 8 }}>Cette configuration permet de chauffer et de rafraîchir chaque pièce indépendamment, pour un confort toute l'année avec un encombrement extérieur limité.</p>
-              <p style={{ marginBottom: 8 }}>La technologie Dual Inverter de LG ajuste en continu la puissance du compresseur au besoin réel de chaque pièce, ce qui limite la consommation électrique tout en assurant un fonctionnement silencieux.</p>
+              <p style={{ marginBottom: 8 }}>{t("desc2")}</p>
+              <p style={{ marginBottom: 8 }}>{t("desc3")}</p>
 
-              <DevisSubH>2.2 Choix des composants</DevisSubH>
+              <DevisSubH>{t("sec22Title")}</DevisSubH>
               <table className="preview-table avoid-break"><thead>
-                <tr><th style={{ width: "5%" }}>#</th><th style={{ width: "22%" }}>Type</th><th>Composants</th><th style={{ width: "12%" }}>Marque</th><th style={{ width: "14%" }}>Quantité</th></tr>
+                <tr><th style={{ width: "5%" }}>{t("thNum")}</th><th style={{ width: "22%" }}>{t("thType")}</th><th>{t("thComponents")}</th><th style={{ width: "12%" }}>{t("thBrand")}</th><th style={{ width: "14%" }}>{t("thQty")}</th></tr>
               </thead><tbody>
                 {outdoorLines.map(({ u, i, line }, idx) => (
-                  <tr key={"ue" + idx}><td>{idx + 1}</td><td>Unité extérieure</td><td>LG {shortModelCode(line.code)}{u.emplacement ? ` · ${u.emplacement}` : ""}</td><td>LG</td><td>1</td></tr>
+                  <tr key={"ue" + idx}><td>{idx + 1}</td><td>{t("rowOutdoorUnit")}</td><td>LG {shortModelCode(line.code)}{u.emplacement ? ` · ${u.emplacement}` : ""}</td><td>LG</td><td>1</td></tr>
                 ))}
                 {indoorAssign.map(({ r, unit }, idx) => (
-                  <tr key={"ui" + idx}><td>{outdoorLines.length + idx + 1}</td><td>Unité intérieure{r.nom ? " · " + r.nom : ""}</td><td>LG {unit.gamme} {shortModelCode(unit.code)} · {unit.kwFroid} kW froid / {unit.kwChaud} kW chaud</td><td>LG</td><td>1</td></tr>
+                  <tr key={"ui" + idx}><td>{outdoorLines.length + idx + 1}</td><td>{t("rowIndoorUnit")}{r.nom ? " · " + r.nom : ""}</td><td>LG {unit.gamme} {shortModelCode(unit.code)} · {t("kwFroidChaud", unit.kwFroid, unit.kwChaud)}</td><td>LG</td><td>1</td></tr>
                 ))}
-                <tr><td>{outdoorLines.length + indoorAssign.length + 1}</td><td>Tuyauteries frigorifiques</td><td>Liaisons cuivre entre unités, jusqu'à {TUBAGE_INCLUS_M} m par unité intérieure incluse</td><td colSpan="2">Inclus</td></tr>
-                <tr><td>{outdoorLines.length + indoorAssign.length + 2}</td><td>Accessoires de raccordement</td><td>Supports, colliers, goulottes et câblage électrique de liaison entre unités</td><td colSpan="2">Inclus</td></tr>
-                <tr><td>{outdoorLines.length + indoorAssign.length + 3}</td><td>Mise en service</td><td>Tirage au vide, contrôle d'étanchéité, mise en service et réglages</td><td colSpan="2">Inclus</td></tr>
-                <tr><td>{outdoorLines.length + indoorAssign.length + 4}</td><td>Visite technique</td><td>Passage d'un technicien We Green avant chantier pour validation finale</td><td colSpan="2">Inclus</td></tr>
-                <tr><td>{outdoorLines.length + indoorAssign.length + 5}</td><td>Mètres courants suppl.</td><td>Au-delà de {TUBAGE_INCLUS_M} m entre une unité intérieure et l'unité extérieure</td><td colSpan="2">Non inclus · {DEFAULT_TUBAGE_PAR_M} €/m (à confirmer sur place)</td></tr>
+                <tr><td>{outdoorLines.length + indoorAssign.length + 1}</td><td>{t("rowRefrigerantPiping")}</td><td>{t("refrigerantPipingDesc", TUBAGE_INCLUS_M)}</td><td colSpan="2">{t("included")}</td></tr>
+                <tr><td>{outdoorLines.length + indoorAssign.length + 2}</td><td>{t("rowConnectionAccessories")}</td><td>{t("connectionAccessoriesDesc")}</td><td colSpan="2">{t("included")}</td></tr>
+                <tr><td>{outdoorLines.length + indoorAssign.length + 3}</td><td>{t("rowCommissioning")}</td><td>{t("commissioningDesc")}</td><td colSpan="2">{t("included")}</td></tr>
+                <tr><td>{outdoorLines.length + indoorAssign.length + 4}</td><td>{t("rowTechVisit")}</td><td>{t("techVisitDesc")}</td><td colSpan="2">{t("included")}</td></tr>
+                <tr><td>{outdoorLines.length + indoorAssign.length + 5}</td><td>{t("rowExtraMeters")}</td><td>{t("extraMetersDesc", TUBAGE_INCLUS_M)}</td><td colSpan="2">{t("notIncludedPrice", DEFAULT_TUBAGE_PAR_M)}</td></tr>
               </tbody></table>
-              <div style={{ fontSize: 10.5, fontStyle: "italic", color: MUTED, marginTop: 3, marginBottom: 10 }}>Le choix précis de l'emplacement de chaque unité intérieure et extérieure est confirmé lors de la visite technique. Les codes produits ci-dessus correspondent à la configuration validée avec votre gestionnaire de projet.</div>
+              <div style={{ fontSize: 10.5, fontStyle: "italic", color: MUTED, marginTop: 3, marginBottom: 10 }}>{t("footnote22")}</div>
             </React.Fragment>
           )}
 
           {boilerSel && (
             <React.Fragment>
-              <DevisSubH>{data.modules.pac ? "2.3" : "2.1"} Boiler thermodynamique</DevisSubH>
+              <DevisSubH>{data.modules.pac ? "2.3" : "2.1"} {t("boilerSectionTitle")}</DevisSubH>
               <table className="preview-table avoid-break"><tbody>
-                <tr><th>Modèle</th><td>Atlantic Explorer V4 {boilerSel.volume} L (réf. {boilerSel.ref})</td></tr>
-                <tr><th>Performance</th><td>COP {boilerSel.cop7} (7°C) · raccordement air {boilerSel.air}</td></tr>
-                <tr><th>Dimensions</th><td>{boilerSel.dims} mm (H×L×P) · {boilerSel.poids} kg</td></tr>
+                <tr><th>{t("boilerModel")}</th><td>{t("boilerModelValue", boilerSel.volume, boilerSel.ref)}</td></tr>
+                <tr><th>{t("boilerPerf")}</th><td>{t("boilerPerfValue", boilerSel.cop7, boilerSel.air)}</td></tr>
+                <tr><th>{t("boilerDims")}</th><td>{t("boilerDimsValue", boilerSel.dims, boilerSel.poids)}</td></tr>
               </tbody></table>
             </React.Fragment>
           )}
@@ -1717,29 +1947,29 @@ function DevisTab({ data, pricing, setPricing, zone, setZone }) {
           {(outdoorSpec || indoorAssign.length > 0) && (
             <React.Fragment>
               <div className="page-break" />
-              <DevisSecBar>3. Fiche technique LG</DevisSecBar>
+              <DevisSecBar>{t("sec3Title")}</DevisSecBar>
               <div style={{ marginBottom: 8 }}>
                 <DevisPill>R32</DevisPill><DevisPill>Dual Inverter</DevisPill><DevisPill>Wi-Fi</DevisPill><DevisPill>Google Assistant</DevisPill>
               </div>
-              <p style={{ marginBottom: 10 }}>Des unités LG {gammesUsed.length ? gammesUsed.join(", ") : "Standard Plus"} au design pensé pour s'intégrer dans toutes les pièces de vie, avec pilotage Wi-Fi via l'application LG ThinQ et compatibilité Google Assistant pour un contrôle vocal simple.</p>
+              <p style={{ marginBottom: 10 }}>{t("sec3Paragraph", gammesUsed.length ? gammesUsed.join(", ") : "Standard Plus")}</p>
 
               {outdoorSpec && (
                 <React.Fragment>
-                  <DevisSubH>3.1 Unité extérieure {shortModelCode(outdoorSpec.code)}</DevisSubH>
+                  <DevisSubH>3.1 {t("sec31OutdoorTitle", shortModelCode(outdoorSpec.code))}</DevisSubH>
                   <table className="preview-table avoid-break compact"><tbody>
-                    <tr><th>Puissance frigorifique</th><td>{outdoorSpec.kwFroid ? outdoorSpec.kwFroid + " kW (nominal)" : "-"}</td></tr>
-                    <tr><th>Puissance calorifique</th><td>{outdoorSpec.kwChaud ? outdoorSpec.kwChaud + " kW (nominal)" : "-"}</td></tr>
-                    <tr><th>Référence</th><td>{outdoorSpec.ref}</td></tr>
-                    <tr><th>Fluide frigorigène</th><td>R32</td></tr>
-                    <tr><th>Raccordements</th><td>Jusqu'à {outdoorSpec.nb[outdoorSpec.nb.length - 1]} unités intérieures</td></tr>
+                    <tr><th>{t("coolingCapacity")}</th><td>{outdoorSpec.kwFroid ? t("kwNominal", outdoorSpec.kwFroid) : "-"}</td></tr>
+                    <tr><th>{t("heatingCapacity")}</th><td>{outdoorSpec.kwChaud ? t("kwNominal", outdoorSpec.kwChaud) : "-"}</td></tr>
+                    <tr><th>{t("reference")}</th><td>{outdoorSpec.ref}</td></tr>
+                    <tr><th>{t("refrigerant")}</th><td>R32</td></tr>
+                    <tr><th>{t("connections")}</th><td>{t("connectionsValue", outdoorSpec.nb[outdoorSpec.nb.length - 1])}</td></tr>
                   </tbody></table>
                 </React.Fragment>
               )}
               {indoorAssign.length > 0 && (
                 <React.Fragment>
-                  <DevisSubH>{outdoorSpec ? "3.2" : "3.1"} Unités intérieures</DevisSubH>
+                  <DevisSubH>{outdoorSpec ? "3.2" : "3.1"} {t("sec32IndoorTitle")}</DevisSubH>
                   <table className="preview-table avoid-break compact"><thead>
-                    <tr><th>Modèle</th><th>Gamme</th><th>Pièce</th><th>Puissance froid / chaud</th><th>Référence</th></tr>
+                    <tr><th>{t("thModel")}</th><th>{t("thGamme")}</th><th>{t("thRoom")}</th><th>{t("thPowerCoolHeat")}</th><th>{t("thReference")}</th></tr>
                   </thead><tbody>
                     {indoorAssign.map(({ r, unit }, idx) => (
                       <tr key={idx}><td>{shortModelCode(unit.code)}</td><td>{unit.gamme}</td><td>{r.nom || "-"}</td><td>{unit.kwFroid} / {unit.kwChaud} kW</td><td>{unit.ref}</td></tr>
@@ -1747,54 +1977,54 @@ function DevisTab({ data, pricing, setPricing, zone, setZone }) {
                   </tbody></table>
                 </React.Fragment>
               )}
-              <div style={{ fontSize: 10.5, fontStyle: "italic", color: MUTED, marginTop: 4 }}>Garantie de 10 ans sur le compresseur (garantie fabricant LG), sous réserve d'une installation par un professionnel certifié et d'un entretien conforme. Données techniques issues de la documentation constructeur, sous réserve de modification par LG sans préavis.</div>
+              <div style={{ fontSize: 10.5, fontStyle: "italic", color: MUTED, marginTop: 4 }}>{t("footnote3")}</div>
             </React.Fragment>
           )}
 
           <div className="page-break" />
-          <DevisSecBar>4. Coût du projet</DevisSecBar>
-          <p style={{ marginBottom: 8, fontWeight: 700 }}>Le coût total du projet, comprenant la fourniture du matériel, les tuyauteries frigorifiques, les accessoires de raccordement, la main d'oeuvre et la mise en service, s'élève à {fmt(bd.prixFinal)} € (HTVA).</p>
-          <p style={{ marginBottom: 4, fontSize: 11, color: MUTED }}>Le taux de TVA de 6% est d'application pour les installations chez des particuliers si votre habitation a plus de 10 ans, 21% si votre habitation a moins de 10 ans. Pour les entreprises, la TVA est en autoliquidation.</p>
+          <DevisSecBar>{t("sec4Title")}</DevisSecBar>
+          <p style={{ marginBottom: 8, fontWeight: 700 }}>{t("sec4Paragraph", fmt(bd.prixFinal))}</p>
+          <p style={{ marginBottom: 4, fontSize: 11, color: MUTED }}>{t("sec4Vat")}</p>
 
-          <DevisSecBar>5. Conditions de vente</DevisSecBar>
-          <DevisSubH>5.1 Conditions de paiement</DevisSubH>
+          <DevisSecBar>{t("sec5Title")}</DevisSecBar>
+          <DevisSubH>{t("sec51Title")}</DevisSubH>
           <ul style={{ marginLeft: 18, marginBottom: 8 }}>
-            <li>À la signature du contrat : 20%</li>
-            <li>À la livraison du matériel et à l'ouverture du chantier : 60%</li>
-            <li>À la clôture du chantier et à la mise en service : 20%</li>
+            <li>{t("payment1")}</li>
+            <li>{t("payment2")}</li>
+            <li>{t("payment3")}</li>
           </ul>
-          <DevisSubH>5.2 Délai de livraison</DevisSubH>
-          <p style={{ marginBottom: 8 }}>Le projet sera livré dans le mois suivant la réception du premier paiement.*</p>
-          <DevisSubH>5.3 Assurance qualité technique</DevisSubH>
-          <p style={{ marginBottom: 8 }}>Tous les matériaux et services sont conformes aux normes internationales en vigueur et aux normes RGIE. We Green est certifiée Rescert pour les 3 régions en Belgique.</p>
-          <DevisSubH>5.4 Garanties We Green</DevisSubH>
+          <DevisSubH>{t("sec52Title")}</DevisSubH>
+          <p style={{ marginBottom: 8 }}>{t("deliveryText")}</p>
+          <DevisSubH>{t("sec53Title")}</DevisSubH>
+          <p style={{ marginBottom: 8 }}>{t("qualityText")}</p>
+          <DevisSubH>{t("sec54Title")}</DevisSubH>
           <ul style={{ marginLeft: 18, marginBottom: 8 }}>
-            <li>Unités LG : 10 ans de garantie sur le compresseur (garantie fabricant).</li>
-            <li>Autres pièces et composants : garantie légale de 2 ans.</li>
-            <li>Installation et mise en service réalisées par une équipe We Green certifiée Rescert.</li>
+            <li>{t("warranty1")}</li>
+            <li>{t("warranty2")}</li>
+            <li>{t("warranty3")}</li>
           </ul>
-          <div style={{ fontSize: 10.5, fontStyle: "italic", color: MUTED, marginBottom: 4 }}>* Si le délai d'installation n'est pas respecté en raison d'un contretemps du côté du client, le délai pourra être renégocié entre les parties. Devis non contractuel avant validation finale par le chauffagiste.</div>
+          <div style={{ fontSize: 10.5, fontStyle: "italic", color: MUTED, marginBottom: 4 }}>{t("footnote54")}</div>
 
           <div className="page-break" />
-          <DevisSecBar>6. Pourquoi choisir We Green</DevisSecBar>
+          <DevisSecBar>{t("sec6Title")}</DevisSecBar>
           <div className="g2" style={{ marginBottom: 10 }}>
-            <DevisCard><div style={{ color: PURPLE, fontWeight: 700 }}>Un interlocuteur unique</div><div style={{ fontSize: 11, fontWeight: 400, color: TEXT, marginTop: 3 }}>{data.chantier.technicien || "Votre gestionnaire de projet"} suit votre projet du premier contact à la mise en service.</div></DevisCard>
-            <DevisCard><div style={{ color: PURPLE, fontWeight: 700 }}>Des équipes certifiées</div><div style={{ fontSize: 11, fontWeight: 400, color: TEXT, marginTop: 3 }}>We Green est certifiée Rescert dans les 3 régions de Belgique.</div></DevisCard>
-            <DevisCard><div style={{ color: PURPLE, fontWeight: 700 }}>Du matériel premium</div><div style={{ fontSize: 11, fontWeight: 400, color: TEXT, marginTop: 3 }}>Nous sélectionnons des marques reconnues comme LG, avec des garanties constructeur solides.</div></DevisCard>
-            <DevisCard><div style={{ color: PURPLE, fontWeight: 700 }}>Un projet sans tracas</div><div style={{ fontSize: 11, fontWeight: 400, color: TEXT, marginTop: 3 }}>Démarches administratives et logistiques prises en charge, pour un chantier fluide de A à Z.</div></DevisCard>
+            <DevisCard><div style={{ color: PURPLE, fontWeight: 700 }}>{t("card1Title")}</div><div style={{ fontSize: 11, fontWeight: 400, color: TEXT, marginTop: 3 }}>{t("card1Body", data.chantier.technicien || t("labelProjectManager"))}</div></DevisCard>
+            <DevisCard><div style={{ color: PURPLE, fontWeight: 700 }}>{t("card2Title")}</div><div style={{ fontSize: 11, fontWeight: 400, color: TEXT, marginTop: 3 }}>{t("card2Body")}</div></DevisCard>
+            <DevisCard><div style={{ color: PURPLE, fontWeight: 700 }}>{t("card3Title")}</div><div style={{ fontSize: 11, fontWeight: 400, color: TEXT, marginTop: 3 }}>{t("card3Body")}</div></DevisCard>
+            <DevisCard><div style={{ color: PURPLE, fontWeight: 700 }}>{t("card4Title")}</div><div style={{ fontSize: 11, fontWeight: 400, color: TEXT, marginTop: 3 }}>{t("card4Body")}</div></DevisCard>
           </div>
 
-          <DevisSecBar>7. Signatures</DevisSecBar>
-          <p style={{ marginBottom: 10, color: MUTED }}>Je soussigné, {data.client.nom || "________________"}, accepte la proposition de We Green décrite dans cette offre, ainsi que leurs conditions générales de vente.</p>
+          <DevisSecBar>{t("sec7Title")}</DevisSecBar>
+          <p style={{ marginBottom: 10, color: MUTED }}>{t("signatureIntro", data.client.nom || "________________")}</p>
           <div className="g2 avoid-break">
             <div>
               <div style={{ borderBottom: `1px solid ${MUTED}`, height: 40 }}></div>
-              <div style={{ fontSize: 10.5, color: MUTED, marginTop: 3 }}>Signature du client</div>
+              <div style={{ fontSize: 10.5, color: MUTED, marginTop: 3 }}>{t("clientSignatureLabel")}</div>
             </div>
             <div>
-              <div style={{ fontWeight: 700, marginBottom: 24, fontSize: 11.5 }}>Nous, We Green, proposons le cadre de travail décrit ci-dessus.</div>
+              <div style={{ fontWeight: 700, marginBottom: 24, fontSize: 11.5 }}>{t("weGreenProposalText")}</div>
               <div style={{ borderBottom: `1px solid ${MUTED}`, height: 20 }}></div>
-              <div style={{ fontSize: 10.5, color: MUTED, marginTop: 3 }}>Signature We Green{data.chantier.technicien ? " · " + data.chantier.technicien : ""}</div>
+              <div style={{ fontSize: 10.5, color: MUTED, marginTop: 3 }}>{t("weGreenSignatureLabel", data.chantier.technicien)}</div>
             </div>
           </div>
 
@@ -1809,7 +2039,7 @@ function DevisTab({ data, pricing, setPricing, zone, setZone }) {
 function App() {
   const [tab, setTab] = useState("chantier");
   const [zone, setZone] = useState("1");
-  const [client, setClient] = useState({ nom: "", adresse: "", tel: "", email: "" });
+  const [client, setClient] = useState({ nom: "", adresse: "", tel: "", email: "", langue: "FR" });
   const [chantier, setChantier] = useState({ date: "", technicien: "" });
   const [modules, setModules] = useState({ pac: true, boiler: true });
   const [comments, setComments] = useState("");
@@ -1865,7 +2095,19 @@ function App() {
                 <Field label="Adresse du chantier"><input value={client.adresse} onChange={e => setClient({ ...client, adresse: e.target.value })} /></Field>
                 <Field label="Téléphone"><input value={client.tel} onChange={e => setClient({ ...client, tel: e.target.value })} /></Field>
                 <Field label="Email"><input value={client.email} onChange={e => setClient({ ...client, email: e.target.value })} /></Field>
+                <Field label="Langue du client">
+                  <select value={client.langue || "FR"} onChange={e => setClient({ ...client, langue: e.target.value })}>
+                    <option value="FR">Français (FR)</option>
+                    <option value="NL">Nederlands (NL)</option>
+                    <option value="EN">English (EN)</option>
+                  </select>
+                </Field>
               </div>
+              {client.langue && client.langue !== "FR" && (
+                <div style={{ marginTop: 8 }}>
+                  <Alert type="info">Le devis sera automatiquement traduit en {client.langue === "NL" ? "néerlandais" : "anglais"} dans l'onglet Devis.</Alert>
+                </div>
+              )}
             </Card>
             <Card title="Visite">
               <div className="g2">
