@@ -342,7 +342,43 @@ label { font-size: 12px; color: #555; font-weight: 600; display: block; margin-b
 <body>
 <div id="root"></div>
 <script type="text/babel" data-presets="react">
-const { useState, useRef, useMemo } = React;
+const { useState, useRef, useMemo, useEffect } = React;
+
+// ═══════════════════════════════════════════════════════════════════════
+// [SOCLE BRIEFING PAC] Intégration Supabase (ajout au générateur de devis).
+// Bloc séparé du contenu métier, volontairement identifiable et reportable.
+// Étape 1 : lecture du ?ref= et sauvegarde automatique dans la table briefings_pac.
+// (Photos non synchronisées à cette étape : prévu ensuite via Storage.)
+// ═══════════════════════════════════════════════════════════════════════
+const WGE_SUPA_URL = "https://brodjywccrirlzplovxg.supabase.co";
+const WGE_SUPA_KEY = "sb_publishable_T4Syy3Nq5mLK0yqOUNgtEg_od2WUXEY";
+const WGE_PAC_TABLE = "briefings_pac";
+function wgeGetRef() {
+  try { return new URLSearchParams(window.location.search).get("ref") || ""; } catch (e) { return ""; }
+}
+async function wgeLoadPac(ref) {
+  try {
+    const url = WGE_SUPA_URL + "/rest/v1/" + WGE_PAC_TABLE + "?ref=eq." + encodeURIComponent(ref) + "&select=id,data&limit=1";
+    const res = await fetch(url, { headers: { apikey: WGE_SUPA_KEY, Authorization: "Bearer " + WGE_SUPA_KEY } });
+    if (!res.ok) return null;
+    const rows = await res.json();
+    return (rows && rows[0]) ? rows[0] : null;
+  } catch (e) { return null; }
+}
+async function wgeSavePac(ref, data, rowIdRef) {
+  const base = WGE_SUPA_URL + "/rest/v1/" + WGE_PAC_TABLE;
+  const H = { apikey: WGE_SUPA_KEY, Authorization: "Bearer " + WGE_SUPA_KEY, "Content-Type": "application/json" };
+  const body = { data: data, updated_at: new Date().toISOString() };
+  try {
+    if (rowIdRef.current) {
+      await fetch(base + "?id=eq." + rowIdRef.current, { method: "PATCH", headers: Object.assign({}, H, { Prefer: "return=minimal" }), body: JSON.stringify(body) });
+    } else {
+      const res = await fetch(base, { method: "POST", headers: Object.assign({}, H, { Prefer: "return=representation" }), body: JSON.stringify(Object.assign({ ref: ref }, body)) });
+      if (res.ok) { const rows = await res.json(); if (rows && rows[0]) rowIdRef.current = rows[0].id; }
+    }
+  } catch (e) { /* silencieux : ne jamais bloquer la saisie */ }
+}
+// ═══════════════════════════════════════════════════════════════════════
 
 /* ============================== PALETTE ============================== */
 const GREEN = "#1B6B3A", GREEN_LIGHT = "#f0f7f2", GREEN_MID = "#d4ead9",
@@ -377,25 +413,25 @@ function shortModelCode(code) { return code ? code.split("/")[0] : code; }
 
 // Unités intérieures LG. price = "Prix We Green" (coût d'achat HTVA), base du calcul du devis.
 const INDOOR_UNITS = [
-  { code: "PM05SK/AMNW05GSAB1", ref: 129300801, gamme: "Standard Plus", label: "UI Standard Plus 1,5/1,6 kW", index: 5, kwFroid: 1.5, kwChaud: 1.6, mono: false, monoCode: null, price: 245.7 },
-  { code: "PM07SK/AMNW07GSAB1", ref: 129300812, gamme: "Standard Plus", label: "UI Standard Plus 2,1/2,3 kW", index: 7, kwFroid: 2.1, kwChaud: 2.3, mono: false, monoCode: null, price: 253.35 },
-  { code: "PZ09NYN.CSJ1", ref: 129301910, gamme: "Standard Plus", label: "UI Standard Plus 2,5/3,2 kW", index: 9, kwFroid: 2.5, kwChaud: 3.2, mono: true, monoCode: "PZ09NYU.CA31", price: 267.3 },
-  { code: "PZ12NYN.CSJ1", ref: 129301930, gamme: "Standard Plus", label: "UI Standard Plus 3,5/4,0 kW", index: 12, kwFroid: 3.5, kwChaud: 4, mono: true, monoCode: "PZ12NYU.CA31", price: 297.9 },
-  { code: "PM15SK/AMNW15GSJB1", ref: 129300842, gamme: "Standard Plus", label: "UI Standard Plus 4,2/5,4 kW", index: 15, kwFroid: 4.2, kwChaud: 5.4, mono: false, monoCode: null, price: 345.6 },
-  { code: "PZ18NYN.CSK1", ref: 129301950, gamme: "Standard Plus", label: "UI Standard Plus 5,0/5,8 kW", index: 18, kwFroid: 5, kwChaud: 5.8, mono: true, monoCode: "PZ18NYU.CL21", price: 376.2 },
-  { code: "PZ24NYN.CSK1", ref: 129301970, gamme: "Standard Plus", label: "UI Standard Plus 6,6/7,5 kW", index: 24, kwFroid: 6.6, kwChaud: 7.5, mono: true, monoCode: "PZ24NYU.C241", price: 469.8 },
-  { code: "PM05SND/ZMNW050A1H0", ref: 129300878, gamme: "Standard Plus Design", label: "UI Standard Plus Design 1,5/1,6 kW", index: 5, kwFroid: 1.5, kwChaud: 1.6, mono: false, monoCode: null, price: 254.7 },
-  { code: "PM07SND/ZMNW070A1H0", ref: 129300879, gamme: "Standard Plus Design", label: "UI Standard Plus Design 2,1/2,3 kW", index: 7, kwFroid: 2.1, kwChaud: 2.3, mono: false, monoCode: null, price: 262.8 },
-  { code: "P09SND/S3NM090A1H0", ref: 129300880, gamme: "Standard Plus Design", label: "UI Standard Plus Design 2,5/3,3 kW", index: 9, kwFroid: 2.5, kwChaud: 3.3, mono: true, monoCode: "P09SND/S3UM090A1H0", price: 294.75 },
-  { code: "P12SND/S3NM120A1H0", ref: 129300890, gamme: "Standard Plus Design", label: "UI Standard Plus Design 3,5/4,0 kW", index: 12, kwFroid: 3.5, kwChaud: 4, mono: true, monoCode: "P12SND/S3UM120A1H0", price: 327.15 },
-  { code: "PM15SND/ZMNW150A1H0", ref: 129300892, gamme: "Standard Plus Design", label: "UI Standard Plus Design 4,2/5,4 kW", index: 15, kwFroid: 4.2, kwChaud: 5.4, mono: false, monoCode: null, price: 360.9 },
-  { code: "H09S1DA/S3NM091A1DA", ref: 129400110, gamme: "Deluxe", label: "UI Deluxe Dualcool 2,5/3,2 kW", index: 9, kwFroid: 2.5, kwChaud: 3.2, mono: true, monoCode: "H09S1DA/S3UM091A1DA", price: 353.25 },
-  { code: "H12S1DA/S3NM121A1DA", ref: 129400310, gamme: "Deluxe", label: "UI Deluxe Dualcool 3,5/3,8 kW", index: 12, kwFroid: 3.5, kwChaud: 3.8, mono: true, monoCode: "H12S1DA/S3UM121A1DA", price: 376.2 },
-  { code: "H18S1DA/S3NM181L1DA", ref: 129400510, gamme: "Deluxe", label: "UI Deluxe Dualcool 5,0/5,8 kW", index: 18, kwFroid: 5, kwChaud: 5.8, mono: true, monoCode: "H18S1DA/S3UM181L1DA", price: 476.1 },
-  { code: "H24S1DA/S3NM24121DA", ref: 129400710, gamme: "Deluxe", label: "UI Deluxe Dualcool 6,6/7,5 kW", index: 24, kwFroid: 6.6, kwChaud: 7.5, mono: true, monoCode: "H24S1DA/S3UM24121DA", price: 568.35 },
-  { code: "AA09SB.NS1", ref: 129400870, gamme: "Artcool Black Matt", label: "UI ARTCOOL Black Matt 2,6/2,9 kW", index: 9, kwFroid: 2.6, kwChaud: 2.9, mono: true, monoCode: "AA09SP/S3UM091LRC0", price: 399.15 },
-  { code: "AA12SB.NS1", ref: 129400880, gamme: "Artcool Black Matt", label: "UI ARTCOOL Black Matt 3,5/4,0 kW", index: 12, kwFroid: 3.5, kwChaud: 4, mono: true, monoCode: "AA12SP/S3UM121LRC0", price: 460.8 },
-  { code: "AA18SB.NS1", ref: 129400890, gamme: "Artcool Black Matt", label: "UI ARTCOOL Black Matt 5,0/5,8 kW", index: 18, kwFroid: 5, kwChaud: 5.8, mono: true, monoCode: "AA18SP/S3UM181LRC0", price: 537.3 },
+  { code: "PM05SK/AMNW05GSAB1", ref: 129300801, gamme: "Standard Plus", label: "UI Standard Plus 1,5/1,6 kW", index: 5, kwFroid: 1.5, kwChaud: 1.6, mono: false, monoCode: null, price: 218.4 },
+  { code: "PM07SK/AMNW07GSAB1", ref: 129300812, gamme: "Standard Plus", label: "UI Standard Plus 2,1/2,3 kW", index: 7, kwFroid: 2.1, kwChaud: 2.3, mono: false, monoCode: null, price: 225.2 },
+  { code: "PZ09NYN.CSJ1", ref: 129301910, gamme: "Standard Plus", label: "UI Standard Plus 2,5/3,2 kW", index: 9, kwFroid: 2.5, kwChaud: 3.2, mono: true, monoCode: "PZ09NYU.CA31", price: 237.6 },
+  { code: "PZ12NYN.CSJ1", ref: 129301930, gamme: "Standard Plus", label: "UI Standard Plus 3,5/4,0 kW", index: 12, kwFroid: 3.5, kwChaud: 4, mono: true, monoCode: "PZ12NYU.CA31", price: 264.8 },
+  { code: "PM15SK/AMNW15GSJB1", ref: 129300842, gamme: "Standard Plus", label: "UI Standard Plus 4,2/5,4 kW", index: 15, kwFroid: 4.2, kwChaud: 5.4, mono: false, monoCode: null, price: 307.2 },
+  { code: "PZ18NYN.CSK1", ref: 129301950, gamme: "Standard Plus", label: "UI Standard Plus 5,0/5,8 kW", index: 18, kwFroid: 5, kwChaud: 5.8, mono: true, monoCode: "PZ18NYU.CL21", price: 334.4 },
+  { code: "PZ24NYN.CSK1", ref: 129301970, gamme: "Standard Plus", label: "UI Standard Plus 6,6/7,5 kW", index: 24, kwFroid: 6.6, kwChaud: 7.5, mono: true, monoCode: "PZ24NYU.C241", price: 417.6 },
+  { code: "PM05SND/ZMNW050A1H0", ref: 129300878, gamme: "Standard Plus Design", label: "UI Standard Plus Design 1,5/1,6 kW", index: 5, kwFroid: 1.5, kwChaud: 1.6, mono: false, monoCode: null, price: 226.4 },
+  { code: "PM07SND/ZMNW070A1H0", ref: 129300879, gamme: "Standard Plus Design", label: "UI Standard Plus Design 2,1/2,3 kW", index: 7, kwFroid: 2.1, kwChaud: 2.3, mono: false, monoCode: null, price: 233.6 },
+  { code: "P09SND/S3NM090A1H0", ref: 129300880, gamme: "Standard Plus Design", label: "UI Standard Plus Design 2,5/3,3 kW", index: 9, kwFroid: 2.5, kwChaud: 3.3, mono: true, monoCode: "P09SND/S3UM090A1H0", price: 262 },
+  { code: "P12SND/S3NM120A1H0", ref: 129300890, gamme: "Standard Plus Design", label: "UI Standard Plus Design 3,5/4,0 kW", index: 12, kwFroid: 3.5, kwChaud: 4, mono: true, monoCode: "P12SND/S3UM120A1H0", price: 290.8 },
+  { code: "PM15SND/ZMNW150A1H0", ref: 129300892, gamme: "Standard Plus Design", label: "UI Standard Plus Design 4,2/5,4 kW", index: 15, kwFroid: 4.2, kwChaud: 5.4, mono: false, monoCode: null, price: 320.8 },
+  { code: "H09S1DA/S3NM091A1DA", ref: 129400110, gamme: "Deluxe", label: "UI Deluxe Dualcool 2,5/3,2 kW", index: 9, kwFroid: 2.5, kwChaud: 3.2, mono: true, monoCode: "H09S1DA/S3UM091A1DA", price: 314 },
+  { code: "H12S1DA/S3NM121A1DA", ref: 129400310, gamme: "Deluxe", label: "UI Deluxe Dualcool 3,5/3,8 kW", index: 12, kwFroid: 3.5, kwChaud: 3.8, mono: true, monoCode: "H12S1DA/S3UM121A1DA", price: 334.4 },
+  { code: "H18S1DA/S3NM181L1DA", ref: 129400510, gamme: "Deluxe", label: "UI Deluxe Dualcool 5,0/5,8 kW", index: 18, kwFroid: 5, kwChaud: 5.8, mono: true, monoCode: "H18S1DA/S3UM181L1DA", price: 423.2 },
+  { code: "H24S1DA/S3NM24121DA", ref: 129400710, gamme: "Deluxe", label: "UI Deluxe Dualcool 6,6/7,5 kW", index: 24, kwFroid: 6.6, kwChaud: 7.5, mono: true, monoCode: "H24S1DA/S3UM24121DA", price: 505.2 },
+  { code: "AA09SB.NS1", ref: 129400870, gamme: "Artcool Black Matt", label: "UI ARTCOOL Black Matt 2,6/2,9 kW", index: 9, kwFroid: 2.6, kwChaud: 2.9, mono: true, monoCode: "AA09SP/S3UM091LRC0", price: 354.8 },
+  { code: "AA12SB.NS1", ref: 129400880, gamme: "Artcool Black Matt", label: "UI ARTCOOL Black Matt 3,5/4,0 kW", index: 12, kwFroid: 3.5, kwChaud: 4, mono: true, monoCode: "AA12SP/S3UM121LRC0", price: 409.6 },
+  { code: "AA18SB.NS1", ref: 129400890, gamme: "Artcool Black Matt", label: "UI ARTCOOL Black Matt 5,0/5,8 kW", index: 18, kwFroid: 5, kwChaud: 5.8, mono: true, monoCode: "AA18SP/S3UM181LRC0", price: 477.6 },
   { code: "UQ09F NA0", ref: 129325100, gamme: "Console", label: "Console UQ09F 2,5/3,2 kW", index: 9, kwFroid: 2.5, kwChaud: 3.2, mono: true, monoCode: "UUA1", price: 499.05 },
   { code: "UQ12F NA0", ref: 129325200, gamme: "Console", label: "Console UQ12F 3,5/3,0 kW", index: 12, kwFroid: 3.5, kwChaud: 3, mono: true, monoCode: "UUA1", price: 553.05 },
   { code: "UQ18F NA0", ref: 129325300, gamme: "Console", label: "Console UQ18F 5,0/5,8 kW", index: 18, kwFroid: 5, kwChaud: 5.8, mono: true, monoCode: "UUB1", price: 621.9 },
@@ -409,23 +445,21 @@ const INDOOR_UNITS = [
 // min/max = somme des classes BTU des UI raccordées (max = "BTU max" fiche produit ; min = 40% du max,
 // ratio de combinaison minimum LG standard - à ajuster si vous disposez d'un ratio différent).
 const OUTDOOR_UNITS = [
-  { code: "MU2R15/Z2UW14GFA3", ref: 129331030, label: "UE Multi F outdoor 4,1 kW", nb: [2], min: 8, max: 21, kwFroid: 4.1, kwChaud: 4.7, price: 837 },
-  { code: "MU2R17/Z2UW16GFA3", ref: 129331130, label: "UE Multi F outdoor 4,69 kW", nb: [2], min: 10, max: 24, kwFroid: 4.69, kwChaud: 5.3, price: 942.75 },
-  { code: "MU3R19/Z3UW19GFA3", ref: 129331230, label: "UE Multi F outdoor 5,3 kW", nb: [2, 3], min: 12, max: 30, kwFroid: 5.3, kwChaud: 6.3, price: 1082.7 },
-  { code: "MU3R21/Z3UW21GFA3", ref: 129331310, label: "UE Multi F outdoor 6,15 kW", nb: [2, 3], min: 13, max: 33, kwFroid: 6.15, kwChaud: 7, price: 1128.6 },
-  { code: "MU4R25/Z4UW24GFA2", ref: 129331420, label: "UE Multi F outdoor 7 kW", nb: [2, 3, 4], min: 16, max: 39, kwFroid: 7, kwChaud: 8.4, price: 1413 },
-  { code: "MU4R27/Z4UW27GFA2", ref: 129331500, label: "UE Multi F outdoor 8 kW", nb: [2, 3, 4], min: 16, max: 41, kwFroid: 8, kwChaud: 9.1, price: 1704.6 },
-  { code: "MU5R30/Z5UW30GFA2", ref: 129331620, label: "UE Multi F outdoor 8,8 kW", nb: [2, 3, 4, 5], min: 19, max: 48, kwFroid: 8.8, kwChaud: 10.1, price: 2073.15 },
+  { code: "MU2R15/Z2UW14GFA3", ref: 129331030, label: "UE Multi F outdoor 4,1 kW", nb: [2], min: 8, max: 21, kwFroid: 4.1, kwChaud: 4.7, price: 688.2 },
+  { code: "MU2R17/Z2UW16GFA3", ref: 129331130, label: "UE Multi F outdoor 4,69 kW", nb: [2], min: 10, max: 24, kwFroid: 4.69, kwChaud: 5.3, price: 775.15 },
+  { code: "MU3R19/Z3UW19GFA3", ref: 129331230, label: "UE Multi F outdoor 5,3 kW", nb: [2, 3], min: 12, max: 30, kwFroid: 5.3, kwChaud: 6.3, price: 890.22 },
+  { code: "MU3R21/Z3UW21GFA3", ref: 129331310, label: "UE Multi F outdoor 6,15 kW", nb: [2, 3], min: 13, max: 33, kwFroid: 6.15, kwChaud: 7, price: 927.96 },
+  { code: "MU4R25/Z4UW24GFA2", ref: 129331420, label: "UE Multi F outdoor 7 kW", nb: [2, 3, 4], min: 16, max: 39, kwFroid: 7, kwChaud: 8.4, price: 1161.8 },
+  { code: "MU4R27/Z4UW27GFA2", ref: 129331500, label: "UE Multi F outdoor 8 kW", nb: [2, 3, 4], min: 16, max: 41, kwFroid: 8, kwChaud: 9.1, price: 1401.56 },
+  { code: "MU5R30/Z5UW30GFA2", ref: 129331620, label: "UE Multi F outdoor 8,8 kW", nb: [2, 3, 4, 5], min: 19, max: 48, kwFroid: 8.8, kwChaud: 10.1, price: 1704.59 },
 ];
 
 // Unités extérieures mono-split : 1 UI = 1 UE dédiée. Clé = code UI, valeur = prix We Green de l'UE mono.
-// Remarque : "AA18SB.NS1" (Artcool Black Matt 5,0/5,8 kW) référence une UE mono absente du classeur fourni ;
-// son prix mono-split reste "à confirmer" tant que cette ligne n'est pas complétée.
 const MONO_OUTDOOR = {
-  "PZ09NYN.CSJ1": 397.8, "PZ12NYN.CSJ1": 406.8, "PZ18NYN.CSK1": 665.1, "PZ24NYN.CSK1": 861.3,
-  "P09SND/S3NM090A1H0": 432.9, "P12SND/S3NM120A1H0": 443.7,
-  "H09S1DA/S3NM091A1DA": 591.3, "H12S1DA/S3NM121A1DA": 637.2, "H18S1DA/S3NM181L1DA": 752.4, "H24S1DA/S3NM24121DA": 867.6,
-  "AA09SB.NS1": 737.1, "AA12SB.NS1": 852.3,
+  "PZ09NYN.CSJ1": 327.08, "PZ12NYN.CSJ1": 334.48, "PZ18NYN.CSK1": 546.86, "PZ24NYN.CSK1": 708.18,
+  "P09SND/S3NM090A1H0": 384.8, "P12SND/S3NM120A1H0": 394.4,
+  "H09S1DA/S3NM091A1DA": 591.3, "H12S1DA/S3NM121A1DA": 566.4, "H18S1DA/S3NM181L1DA": 668.8, "H24S1DA/S3NM24121DA": 771.2,
+  "AA09SB.NS1": 737.1, "AA12SB.NS1": 852.3, "AA18SB.NS1": 890.55,
   "UQ09F NA0": 790.65, "UQ12F NA0": 790.65, "UQ18F NA0": 959.85,
   "CT09F.NR0": 790.65, "CT12F.NR0": 790.65, "CT18F.NQ0": 959.85, "CT24F.NP0": 1451.25,
 };
@@ -527,6 +561,57 @@ function validateOutdoorChoice(code, assignedUnits) {
     return { ok: false, reason: `Puissance cumulée des unités intérieures (index ${sumIndex}) hors plage ${u.min}-${u.max} pour ce modèle.` };
   }
   return { ok: true };
+}
+/* ============================== LONGUEURS DE TUYAUTERIE (specs constructeur LG) ============================== */
+// RAC (mono-split), par classe BTU de l'unité intérieure retenue (voir BTU_CLASS_MAXW pour la correspondance).
+// Classes 5, 7 et 15 absentes de la fiche fournie par le fournisseur : extrapolées sur la classe la plus proche
+// (5 et 7 -> classe 9 ; 15 -> classe 12, choix conservateur). À confirmer si vous disposez des valeurs exactes.
+const RAC_PIPE_SPECS = {
+  9: { maxLength: 15, maxDeniv: 7 },
+  12: { maxLength: 15, maxDeniv: 7 },
+  18: { maxLength: 20, maxDeniv: 10 },
+  24: { maxLength: 30, maxDeniv: 15 },
+};
+function getRacPipeSpec(index) {
+  if (RAC_PIPE_SPECS[index]) return RAC_PIPE_SPECS[index];
+  if (index < 9) return RAC_PIPE_SPECS[9];
+  if (index < 18) return RAC_PIPE_SPECS[12];
+  return RAC_PIPE_SPECS[24];
+}
+// Multi F, par famille d'unité extérieure (préfixe du code, ex. "MU3R" pour MU3R19/MU3R21).
+const MULTIF_PIPE_SPECS = {
+  MU2R: { maxTotal: 30, maxPerPort: 20, maxDeniv: 15 },
+  MU3R: { maxTotal: 50, maxPerPort: 25, maxDeniv: 15 },
+  MU4R: { maxTotal: 70, maxPerPort: 25, maxDeniv: 15 },
+  MU5R: { maxTotal: 75, maxPerPort: 25, maxDeniv: 15 },
+};
+function getMultiFPipeSpec(code) {
+  const m = code && code.match(/^(MU\dR)/);
+  return m ? MULTIF_PIPE_SPECS[m[1]] : null;
+}
+// Vérifie les distances déclarées (tuyauterie frigorifique) par rapport aux longueurs maximales théoriques
+// constructeur. roomsWithUnit : [{ nom, distanceUE, effectiveIndex }]. Retourne un message d'alerte ou null.
+function checkPipeLengths(roomsWithUnit, mono, outdoorCode) {
+  const withDist = roomsWithUnit.filter(r => r.distanceUE && parseFloat(r.distanceUE) > 0);
+  if (withDist.length === 0) return null;
+  if (mono) {
+    const r = withDist[0];
+    const spec = getRacPipeSpec(r.effectiveIndex || 9);
+    const d = parseFloat(r.distanceUE);
+    if (d > spec.maxLength) {
+      return `Distance déclarée (${d} m) supérieure à la longueur maximale théorique LG pour cette unité (${spec.maxLength} m). Dénivellation max théorique : ${spec.maxDeniv} m. À valider avec le fournisseur avant chantier.`;
+    }
+    return null;
+  }
+  const spec = getMultiFPipeSpec(outdoorCode);
+  if (!spec) return null;
+  const total = withDist.reduce((s, r) => s + (parseFloat(r.distanceUE) || 0), 0);
+  const overPort = withDist.filter(r => parseFloat(r.distanceUE) > spec.maxPerPort);
+  const issues = [];
+  if (total > spec.maxTotal) issues.push(`longueur cumulée (${total.toFixed(1)} m) supérieure au maximum théorique (${spec.maxTotal} m)`);
+  if (overPort.length > 0) issues.push(`distance par port supérieure au maximum (${spec.maxPerPort} m) pour : ${overPort.map(r => r.nom || "pièce").join(", ")}`);
+  if (issues.length === 0) return null;
+  return `Tuyauterie frigorifique : ${issues.join(" ; ")}. Dénivellation max théorique : ${spec.maxDeniv} m. À valider avec le fournisseur avant chantier.`;
 }
 // Calcul complet du devis : lignes de coût (matériel + services), frais annexes, marge et commission.
 // Chaque ligne porte une clé stable (pricing.overrides[key]) permettant une surcharge manuelle du tarif,
@@ -945,6 +1030,11 @@ function OutdoorUnitCard({ ue, idx, rooms, onChange, onRemove }) {
   const effectiveUnits = assigned.map(r => getEffectiveIndoorUnit(r));
   const compat = ue.overrideCode ? validateOutdoorChoice(ue.overrideCode, effectiveUnits) : { ok: null };
 
+  // Alerte technique : distances déclarées vs longueurs/dénivellations maximales théoriques constructeur LG.
+  const roomsWithUnit = assigned.map((r, i) => ({ nom: r.nom, distanceUE: r.distanceUE, effectiveIndex: effectiveUnits[i] ? effectiveUnits[i].index : r.indexVal }));
+  const effectiveOutdoorCode = ue.overrideCode || (result.ok && !result.mono ? result.best.code : null);
+  const pipeWarning = result.ok ? checkPipeLengths(roomsWithUnit, result.mono, effectiveOutdoorCode) : null;
+
   function toggleRoom(id) {
     const set2 = new Set(ue.roomIds || []);
     set2.has(id) ? set2.delete(id) : set2.add(id);
@@ -973,6 +1063,7 @@ function OutdoorUnitCard({ ue, idx, rooms, onChange, onRemove }) {
       ) : (
         <Alert type="error">{result.msg}</Alert>
       )}
+      {pipeWarning && <Alert type="warn">⚠ {pipeWarning}</Alert>}
 
       <Field label="Modèle d'unité extérieure retenu" hint="Suggestion automatique par défaut (configuration multi-split), modifiable si un autre modèle est souhaité.">
         <select value={ue.overrideCode || ""} onChange={e => set({ overrideCode: e.target.value })}>
@@ -2059,6 +2150,44 @@ function App() {
   }, 0), [pac]);
 
   const data = { client, chantier, modules, comments, pac, elec, boiler };
+
+  // [SOCLE BRIEFING PAC] chargement initial + sauvegarde automatique par ref
+  const wgeRef = wgeGetRef();
+  const wgeRowId = useRef(null);
+  const wgeReady = useRef(false);
+  const wgeTimer = useRef(null);
+  useEffect(function () {
+    if (!wgeRef) { wgeReady.current = true; return; }
+    wgeLoadPac(wgeRef).then(function (row) {
+      if (row && row.data) {
+        var d = row.data;
+        if (d.client) setClient(d.client);
+        if (d.chantier) setChantier(d.chantier);
+        if (d.modules) setModules(d.modules);
+        if (typeof d.comments === "string") setComments(d.comments);
+        if (d.pac) setPac(d.pac);
+        if (d.elec) setElec(function (p) { return Object.assign({}, d.elec, { photos: p.photos }); });
+        if (d.boiler) setBoiler(function (p) { return Object.assign({}, d.boiler, { photos: p.photos }); });
+        if (d.pricing) setPricing(d.pricing);
+        wgeRowId.current = row.id;
+      }
+      wgeReady.current = true;
+    });
+  }, []);
+  useEffect(function () {
+    if (!wgeRef || !wgeReady.current) return;
+    if (wgeTimer.current) clearTimeout(wgeTimer.current);
+    wgeTimer.current = setTimeout(function () {
+      var payload = {
+        client: client, chantier: chantier, modules: modules, comments: comments,
+        pac: pac,
+        elec: Object.assign({}, elec, { photos: [] }),
+        boiler: Object.assign({}, boiler, { photos: [] }),
+        pricing: pricing
+      };
+      wgeSavePac(wgeRef, payload, wgeRowId);
+    }, 1200);
+  }, [client, chantier, modules, comments, pac, elec, boiler, pricing]);
   const TABS = [
     { key: "chantier", label: "🏠 Chantier" },
     { key: "pac", label: "❄️ Pompe à chaleur" },
@@ -2145,7 +2274,7 @@ function App() {
       </div>
 
       <div className="no-print" style={{ textAlign: "center", fontSize: 11, color: MUTED, padding: "0 16px 30px" }}>
-        Prototype de démonstration, données conservées uniquement dans cette page (aucune sauvegarde). Fermer l'onglet efface les données.
+        {wgeRef ? ("Enregistrement automatique dans le dossier " + wgeRef + " (photos non incluses pour le moment).") : "Astuce : ouvrez cette page avec ?ref=Sxxxxx pour enregistrer automatiquement le devis."}
       </div>
     </div>
   );
