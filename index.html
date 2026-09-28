@@ -353,6 +353,24 @@ const { useState, useRef, useMemo, useEffect } = React;
 const WGE_SUPA_URL = "https://brodjywccrirlzplovxg.supabase.co";
 const WGE_SUPA_KEY = "sb_publishable_T4Syy3Nq5mLK0yqOUNgtEg_od2WUXEY";
 const WGE_PAC_TABLE = "briefings_pac";
+const WGE_ODOO_FN_URL = WGE_SUPA_URL + "/functions/v1/fetch-odoo-order";
+// Liste des Project Managers (reprise de la feuille de chantier PV + Jonathan Fievez pour les PAC).
+const WGE_PM_DATA = {
+  "Jonathan Fievez":         { tel: "+32 472 36 43 36", email: "jonathan.fievez@we-green.be" },
+  "Alexander Vos":           { tel: "+32 475 86 92 76", email: "alexander.vos@we-green.be" },
+  "Benjamin Hers":           { tel: "+32 479 62 75 11", email: "benjamin.hers@we-green.be" },
+  "Dominic Rousselle":       { tel: "+32 495 81 16 70", email: "dominic.rousselle@we-green.be" },
+  "Enguerrand de Formanoir": { tel: "+32 495 87 09 86", email: "enguerrand.deformanoir@we-green.be" },
+  "Nassim Fekreche":         { tel: "", email: "" },
+  "Nelson Hohlweg":          { tel: "0496 77 54 43",    email: "nelson.hohlweg@we-green.be" },
+  "Romain Janssens":         { tel: "+32 493 56 93 51", email: "romain.janssens@we-green.be" },
+  "Teresa Rousselle":        { tel: "+32 497 69 26 27", email: "teresa.rousselle@we-green.be" },
+  "Thibaut Cougnet":         { tel: "+32 494 47 11 85", email: "thibaut.cougnet@we-green.be" },
+  "Valentin Dabauvalle":     { tel: "+32 470 63 53 80", email: "valentin.dabauvalle@we-green.be" },
+  "Wajdi Habib":             { tel: "+32 495 28 86 66", email: "wajdi.habib@we-green.be" },
+  "Wissam Elhage":           { tel: "+32 471 91 63 13", email: "wissam.elhage@we-green.be" },
+  "Yohan Poullain":          { tel: "+33 6 42 96 82 63", email: "yohan.poullain@we-green.be" }
+};
 function wgeGetRef() {
   try { return new URLSearchParams(window.location.search).get("ref") || ""; } catch (e) { return ""; }
 }
@@ -371,12 +389,66 @@ async function wgeSavePac(ref, data, rowIdRef) {
   const body = { data: data, updated_at: new Date().toISOString() };
   try {
     if (rowIdRef.current) {
-      await fetch(base + "?id=eq." + rowIdRef.current, { method: "PATCH", headers: Object.assign({}, H, { Prefer: "return=minimal" }), body: JSON.stringify(body) });
+      const res = await fetch(base + "?id=eq." + rowIdRef.current, { method: "PATCH", headers: Object.assign({}, H, { Prefer: "return=minimal" }), body: JSON.stringify(body) });
+      return res.ok;
     } else {
       const res = await fetch(base, { method: "POST", headers: Object.assign({}, H, { Prefer: "return=representation" }), body: JSON.stringify(Object.assign({ ref: ref }, body)) });
       if (res.ok) { const rows = await res.json(); if (rows && rows[0]) rowIdRef.current = rows[0].id; }
+      return res.ok;
     }
-  } catch (e) { /* silencieux : ne jamais bloquer la saisie */ }
+  } catch (e) { return false; }
+}
+// [SOCLE] Upload des photos base64 vers Supabase Storage (mêmes réglages que le PV).
+const WGE_STORAGE_BUCKET = "chantier-photos";
+async function wgeUploadPhoto(ref, catKey, base64DataUrl, fileName) {
+  if (!base64DataUrl || base64DataUrl.indexOf("data:") !== 0) return base64DataUrl;
+  try {
+    const blob = await (await fetch(base64DataUrl)).blob();
+    const ext = blob.type === "image/jpeg" ? "jpg" : "png";
+    const safe = String(fileName || "photo").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 40);
+    // Préfixe "pac/" pour ne jamais entrer en collision avec les photos du briefing PV.
+    const p = "pac/" + ref + "/" + catKey + "/" + Date.now() + "-" + safe + "." + ext;
+    const up = await fetch(WGE_SUPA_URL + "/storage/v1/object/" + WGE_STORAGE_BUCKET + "/" + p, {
+      method: "POST",
+      headers: { apikey: WGE_SUPA_KEY, Authorization: "Bearer " + WGE_SUPA_KEY, "Content-Type": blob.type, "x-upsert": "true" },
+      body: blob
+    });
+    if (up.ok) return WGE_SUPA_URL + "/storage/v1/object/public/" + WGE_STORAGE_BUCKET + "/" + p;
+    return base64DataUrl;
+  } catch (e) { return base64DataUrl; }
+}
+async function wgeUploadArr(ref, catKey, arr) {
+  let changed = false;
+  const out = await Promise.all((arr || []).map(async function (ph) {
+    if (ph && ph.url && ph.url.indexOf("data:") === 0) {
+      const u = await wgeUploadPhoto(ref, catKey, ph.url, ph.id || "photo");
+      if (u !== ph.url) { changed = true; return Object.assign({}, ph, { url: u }); }
+    }
+    return ph;
+  }));
+  return { arr: out, changed: changed };
+}
+// Parcourt toutes les zones de photos du devis PAC (élec, boiler, pièces, unités ext.)
+async function wgeUploadAllPacPhotos(ref, elec, boiler, pac) {
+  let changed = false;
+  const e = await wgeUploadArr(ref, "elec", elec.photos);
+  const newElec = e.changed ? (changed = true, Object.assign({}, elec, { photos: e.arr })) : elec;
+  const b = await wgeUploadArr(ref, "boiler", boiler.photos);
+  const newBoiler = b.changed ? (changed = true, Object.assign({}, boiler, { photos: b.arr })) : boiler;
+  let pacChanged = false;
+  const rooms = await Promise.all((pac.rooms || []).map(async function (room, i) {
+    const p1 = await wgeUploadArr(ref, "room-" + i, room.photos);
+    const p2 = await wgeUploadArr(ref, "room-" + i + "-tubage", room.photosTubage);
+    if (p1.changed || p2.changed) { pacChanged = true; return Object.assign({}, room, { photos: p1.arr, photosTubage: p2.arr }); }
+    return room;
+  }));
+  const ues = await Promise.all((pac.outdoorUnits || []).map(async function (ue, i) {
+    const p = await wgeUploadArr(ref, "ue-" + i, ue.photos);
+    if (p.changed) { pacChanged = true; return Object.assign({}, ue, { photos: p.arr }); }
+    return ue;
+  }));
+  const newPac = pacChanged ? (changed = true, Object.assign({}, pac, { rooms: rooms, outdoorUnits: ues })) : pac;
+  return { elec: newElec, boiler: newBoiler, pac: newPac, changed: changed };
 }
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -2132,12 +2204,17 @@ function App() {
   const [zone, setZone] = useState("1");
   const [client, setClient] = useState({ nom: "", adresse: "", tel: "", email: "", langue: "FR" });
   const [chantier, setChantier] = useState({ date: "", technicien: "" });
+  const [pm, setPm] = useState({ nom: "", tel: "", email: "" }); // [SOCLE] Project Manager
   const [modules, setModules] = useState({ pac: true, boiler: true });
   const [comments, setComments] = useState("");
   const [pac, setPac] = useState({ typeProjet: "", usage: "", rooms: [], outdoorUnits: [] });
   const [elec, setElec] = useState({ point: "", priseExistante: "", distance: "", reseau: "", cheminement: "", puissanceDispo: "", tableauAdapter: "", remarque: "", photos: [] });
   const [boiler, setBoiler] = useState({ systemeActuel: "", volumeActuel: "", ageActuel: "", aEvacuer: false, occupants: "", volumeSouhaite: "", piece: "", surface: "", hauteur: "", dimAcces: "", evacEau: "", raccordElec: "", condensats: "", longueurGainage: "", arriveeFroide: "", departChaude: "", collecteur: "", photos: [] });
   const [pricing, setPricing] = useState({ multiplicateur: 1.4, commissionPct: 25, fraisAnnexes: 0, overrides: {} });
+  const [odooLoading, setOdooLoading] = useState(false); // [SOCLE] import Odoo
+  const [odooMsg, setOdooMsg] = useState("");
+  const [saveStatus, setSaveStatus] = useState(""); // "", "saving", "saved", "error"
+  const [lastSaved, setLastSaved] = useState(null);
 
   const totalKwChaud = useMemo(() => pac.outdoorUnits.reduce((sum, u) => {
     const eligible = pac.rooms.filter(r => (u.roomIds || []).includes(r.id)).map(r => {
@@ -2149,7 +2226,7 @@ function App() {
     return sum;
   }, 0), [pac]);
 
-  const data = { client, chantier, modules, comments, pac, elec, boiler };
+  const data = { client, chantier, pm, modules, comments, pac, elec, boiler };
 
   // [SOCLE BRIEFING PAC] chargement initial + sauvegarde automatique par ref
   const wgeRef = wgeGetRef();
@@ -2166,28 +2243,88 @@ function App() {
         if (d.modules) setModules(d.modules);
         if (typeof d.comments === "string") setComments(d.comments);
         if (d.pac) setPac(d.pac);
-        if (d.elec) setElec(function (p) { return Object.assign({}, d.elec, { photos: p.photos }); });
-        if (d.boiler) setBoiler(function (p) { return Object.assign({}, d.boiler, { photos: p.photos }); });
+        if (d.elec) setElec(d.elec);
+        if (d.boiler) setBoiler(d.boiler);
         if (d.pricing) setPricing(d.pricing);
+        if (d.pm) setPm(d.pm);
         wgeRowId.current = row.id;
+        if (row.updated_at) setLastSaved(row.updated_at);
       }
       wgeReady.current = true;
     });
   }, []);
+  // [SOCLE] Construit le contenu à sauvegarder (photos exclues à cette étape)
+  // [SOCLE] Upload des photos (base64 -> Storage) puis sauvegarde JSON léger (URLs)
+  function wgeUploadThenSave() {
+    return wgeUploadAllPacPhotos(wgeRef, elec, boiler, pac).then(function (up) {
+      if (up.changed) { setElec(up.elec); setBoiler(up.boiler); setPac(up.pac); }
+      var payload = {
+        client: client, chantier: chantier, pm: pm, modules: modules, comments: comments,
+        pac: up.pac, elec: up.elec, boiler: up.boiler, pricing: pricing
+      };
+      return wgeSavePac(wgeRef, payload, wgeRowId);
+    }).then(function (ok) {
+      setSaveStatus(ok ? "saved" : "error");
+      if (ok) setLastSaved(new Date().toISOString());
+      return ok;
+    });
+  }
+  // [SOCLE] Sauvegarde manuelle immédiate (bouton)
+  function wgeSaveNow() {
+    if (!wgeRef) { setOdooMsg("Aucune référence (ajoutez ?ref=Sxxxxx dans l'URL)."); return; }
+    setSaveStatus("saving");
+    wgeUploadThenSave();
+  }
+  // [SOCLE] Sauvegarde automatique (debounce) avec statut + upload photos
   useEffect(function () {
     if (!wgeRef || !wgeReady.current) return;
+    setSaveStatus("saving");
     if (wgeTimer.current) clearTimeout(wgeTimer.current);
-    wgeTimer.current = setTimeout(function () {
-      var payload = {
-        client: client, chantier: chantier, modules: modules, comments: comments,
-        pac: pac,
-        elec: Object.assign({}, elec, { photos: [] }),
-        boiler: Object.assign({}, boiler, { photos: [] }),
-        pricing: pricing
-      };
-      wgeSavePac(wgeRef, payload, wgeRowId);
-    }, 1200);
-  }, [client, chantier, modules, comments, pac, elec, boiler, pricing]);
+    wgeTimer.current = setTimeout(function () { wgeUploadThenSave(); }, 1200);
+  }, [client, chantier, pm, modules, comments, pac, elec, boiler, pricing]);
+  // [SOCLE] Import client + PM depuis la commande Odoo (réutilise l'Edge Function du PV)
+  function wgeRefreshFromOdoo() {
+    if (!wgeRef) { setOdooMsg("Aucune référence chantier (ajoutez ?ref=... dans l'URL)."); return; }
+    setOdooLoading(true); setOdooMsg("");
+    fetch(WGE_ODOO_FN_URL, {
+      method: "POST",
+      headers: { apikey: WGE_SUPA_KEY, Authorization: "Bearer " + WGE_SUPA_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ ref: wgeRef })
+    }).then(function (res) {
+      if (!res.ok) {
+        if (res.status === 404) throw new Error("Fonction Odoo introuvable.");
+        if (res.status === 401 || res.status === 403) throw new Error("Identifiants Odoo refusés côté serveur.");
+        throw new Error("Erreur Odoo (" + res.status + ").");
+      }
+      return res.json();
+    }).then(function (out) {
+      if (!out || out.ok === false) {
+        setOdooMsg(out && out.error === "not_found" ? ("Commande " + wgeRef + " introuvable dans Odoo.") : ("Réponse Odoo invalide" + (out && out.error ? " : " + out.error : "")));
+        setOdooLoading(false); return;
+      }
+      var r = out.order || out;
+      var found = [];
+      if (r.client && (r.client.nom || r.client.adresse || r.client.tel || r.client.email)) {
+        setClient(function (p) { return Object.assign({}, p, {
+          nom: r.client.nom || p.nom, adresse: r.client.adresse || p.adresse,
+          tel: r.client.tel || p.tel, email: r.client.email || p.email
+        }); });
+        if (r.client.nom) found.push("client");
+        if (r.client.adresse) found.push("adresse");
+      }
+      if (r.manager) {
+        var info = WGE_PM_DATA[r.manager] || { tel: "", email: "" };
+        setPm({ nom: r.manager, tel: info.tel, email: info.email });
+        setChantier(function (p) { return Object.assign({}, p, { technicien: r.manager }); });
+        found.push("PM");
+      }
+      setOdooMsg(found.length ? ("✓ Odoo : " + found.join(" · ") + (r.name ? "  [" + r.name + "]" : "")) : "Commande trouvée mais aucune donnée client/PM.");
+      setOdooLoading(false);
+    }).catch(function (e) {
+      setOdooMsg(e && e.message ? e.message : "Erreur réseau lors de l'appel Odoo.");
+      setOdooLoading(false);
+    });
+  }
   const TABS = [
     { key: "chantier", label: "🏠 Chantier" },
     { key: "pac", label: "❄️ Pompe à chaleur" },
@@ -2218,6 +2355,21 @@ function App() {
         {tab === "chantier" && (
           <div>
             <SectionHeader sub="Informations générales du chantier.">Chantier</SectionHeader>
+            {/* [SOCLE] Barre import Odoo + sauvegarde */}
+            <div className="no-print" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", background: GREEN_LIGHT, border: "1px solid " + GREEN_MID, borderRadius: 12, padding: "10px 14px", marginBottom: 14 }}>
+              <button onClick={wgeRefreshFromOdoo} disabled={odooLoading || !wgeRef}
+                style={{ display: "flex", alignItems: "center", gap: 7, background: odooLoading ? "#8fbf9f" : GREEN, color: WHITE, border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: (odooLoading || !wgeRef) ? "default" : "pointer", opacity: !wgeRef ? 0.5 : 1 }}>
+                {odooLoading ? "⏳ Import Odoo…" : "🔄 Importer depuis Odoo"}
+              </button>
+              <button onClick={wgeSaveNow} disabled={!wgeRef}
+                style={{ background: WHITE, color: GREEN, border: "1px solid " + GREEN, borderRadius: 8, padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: !wgeRef ? "default" : "pointer", opacity: !wgeRef ? 0.5 : 1 }}>
+                💾 Enregistrer
+              </button>
+              <span style={{ fontSize: 12, fontWeight: 600, color: saveStatus === "error" ? RED : saveStatus === "saved" ? GREEN : MUTED }}>
+                {saveStatus === "saving" ? "Enregistrement…" : saveStatus === "saved" ? "✓ Enregistré" : saveStatus === "error" ? "⚠ Échec de l'enregistrement" : (wgeRef ? "" : "Ajoutez ?ref=Sxxxxx à l'URL")}
+              </span>
+              {odooMsg && <span style={{ fontSize: 12, fontWeight: 600, color: odooMsg.charAt(0) === "✓" ? GREEN : RED, background: odooMsg.charAt(0) === "✓" ? GREEN_LIGHT : RED_BG, padding: "4px 10px", borderRadius: 6, marginLeft: "auto" }}>{odooMsg}</span>}
+            </div>
             <Card title="Client">
               <div className="g2">
                 <Field label="Nom du client"><input value={client.nom} onChange={e => setClient({ ...client, nom: e.target.value })} /></Field>
@@ -2241,7 +2393,16 @@ function App() {
             <Card title="Visite">
               <div className="g2">
                 <Field label="Date"><input type="date" value={chantier.date} onChange={e => setChantier({ ...chantier, date: e.target.value })} /></Field>
-                <Field label="Technicien"><input value={chantier.technicien} onChange={e => setChantier({ ...chantier, technicien: e.target.value })} /></Field>
+                <Field label="Project Manager">
+                  <select value={pm.nom || ""} onChange={e => { var n = e.target.value; var info = WGE_PM_DATA[n] || { tel: "", email: "" }; setPm({ nom: n, tel: info.tel, email: info.email }); setChantier(function(p){ return Object.assign({}, p, { technicien: n }); }); }}>
+                    <option value="">— Sélectionner —</option>
+                    {Object.keys(WGE_PM_DATA).map(function(m){ return <option key={m} value={m}>{m}</option>; })}
+                  </select>
+                </Field>
+                <Field label="Technicien (visite)"><input value={chantier.technicien} onChange={e => setChantier({ ...chantier, technicien: e.target.value })} /></Field>
+                {pm.nom && (pm.tel || pm.email) && (
+                  <div style={{ fontSize: 12, color: MUTED, gridColumn: "1 / -1" }}>{[pm.tel, pm.email].filter(Boolean).join(" · ")}</div>
+                )}
               </div>
             </Card>
             <Card title="Modules concernés par ce chantier">
@@ -2274,7 +2435,7 @@ function App() {
       </div>
 
       <div className="no-print" style={{ textAlign: "center", fontSize: 11, color: MUTED, padding: "0 16px 30px" }}>
-        {wgeRef ? ("Enregistrement automatique dans le dossier " + wgeRef + " (photos non incluses pour le moment).") : "Astuce : ouvrez cette page avec ?ref=Sxxxxx pour enregistrer automatiquement le devis."}
+        {wgeRef ? ("Enregistrement automatique dans le dossier " + wgeRef + ", photos comprises.") : "Astuce : ouvrez cette page avec ?ref=Sxxxxx pour enregistrer automatiquement le devis."}
       </div>
     </div>
   );
