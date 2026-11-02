@@ -465,6 +465,11 @@ async function wgeUploadAllPacPhotos(ref, elec, boiler, pac) {
 const WGE_GOOGLE_CLIENT_ID = "REMPLACER_PAR_LE_CLIENT_ID_GOOGLE"; // Identifiant client OAuth Google (non secret).
 const WGE_AUTH_DOMAINS = ["we-green.be", "we-cover.be", "we-green.fr"];
 const WGE_AUTH_STORAGE_KEY = "wge_pac_auth";
+// Filet de sécurité : un Client ID Google mal configuré (placeholder non remplacé, ID invalide ou
+// supprimé côté Google Cloud) ne doit jamais bloquer tout le monde hors de l'outil. Un vrai Client ID
+// OAuth Google se termine toujours par ".apps.googleusercontent.com" ; si ce n'est pas le cas, on
+// désactive le filtre de connexion et on laisse passer directement (comportement d'avant la fonctionnalité).
+const WGE_GOOGLE_AUTH_READY = /\.apps\.googleusercontent\.com$/.test(WGE_GOOGLE_CLIENT_ID);
 
 function wgeDecodeJwt(token) {
   try {
@@ -502,7 +507,7 @@ function AuthGate(props) {
   const btnRef = useRef(null);
 
   useEffect(function () {
-    if (auth) return;
+    if (auth || !WGE_GOOGLE_AUTH_READY) return;
     let cancelled = false;
     function initGoogle() {
       if (cancelled || !btnRef.current) return;
@@ -538,6 +543,11 @@ function AuthGate(props) {
     }, 150);
     return function () { cancelled = true; clearInterval(timer); };
   }, [auth]);
+
+  if (!WGE_GOOGLE_AUTH_READY) {
+    // Client ID Google absent/invalide : accès direct, pas de blocage (voir WGE_GOOGLE_AUTH_READY ci-dessus).
+    return props.children;
+  }
 
   if (auth) {
     return (
